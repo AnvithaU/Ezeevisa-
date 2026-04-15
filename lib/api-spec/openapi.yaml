@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: VisaPath e-Visa Portal API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: visas
+    description: Visa country and type information
+  - name: applications
+    description: Visa applications
+  - name: documents
+    description: Document uploads
+  - name: dashboard
+    description: Dashboard analytics
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,7 +34,495 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBody"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /visas/countries:
+    get:
+      operationId: getVisaCountries
+      tags: [visas]
+      summary: Get all available visa destination countries
+      responses:
+        "200":
+          description: List of countries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/VisaCountry"
+
+  /visas/countries/{countryCode}:
+    get:
+      operationId: getVisaCountry
+      tags: [visas]
+      summary: Get visa details for a specific country
+      parameters:
+        - name: countryCode
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Country visa details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VisaCountry"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /applications:
+    get:
+      operationId: listApplications
+      tags: [applications]
+      summary: List applications for the current user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, submitted, under_review, approved, rejected, all]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of applications
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApplicationListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: createApplication
+      tags: [applications]
+      summary: Create a new visa application
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApplicationBody"
+      responses:
+        "201":
+          description: Application created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /applications/{id}:
+    get:
+      operationId: getApplication
+      tags: [applications]
+      summary: Get a specific application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      operationId: updateApplication
+      tags: [applications]
+      summary: Update a visa application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApplicationBody"
+      responses:
+        "200":
+          description: Updated application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      operationId: deleteApplication
+      tags: [applications]
+      summary: Delete a draft application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /applications/{id}/submit:
+    post:
+      operationId: submitApplication
+      tags: [applications]
+      summary: Submit a draft application for processing
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Application submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "400":
+          description: Application not ready to submit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /applications/{id}/documents:
+    get:
+      operationId: listApplicationDocuments
+      tags: [documents]
+      summary: List documents for an application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Document"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: uploadDocument
+      tags: [documents]
+      summary: Upload a document for an application
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadDocumentBody"
+      responses:
+        "201":
+          description: Document uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Document"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /applications/{id}/documents/{docId}:
+    delete:
+      operationId: deleteDocument
+      tags: [documents]
+      summary: Delete a document
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: docId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get dashboard summary stats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Get recent activity feed for the user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Recent activity
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +532,415 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+      required:
+        - error
+
+    RegisterBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+      required:
+        - email
+        - password
+        - firstName
+        - lastName
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    AuthResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - token
+        - user
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - email
+        - firstName
+        - lastName
+        - createdAt
+
+    VisaCountry:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        flag:
+          type: string
+        continent:
+          type: string
+        visaTypes:
+          type: array
+          items:
+            $ref: "#/components/schemas/VisaType"
+        processingDays:
+          type: integer
+        fee:
+          type: number
+        currency:
+          type: string
+        requiredDocuments:
+          type: array
+          items:
+            type: string
+        maxStay:
+          type: string
+        validity:
+          type: string
+        isFeatured:
+          type: boolean
+      required:
+        - code
+        - name
+        - flag
+        - continent
+        - visaTypes
+        - processingDays
+        - fee
+        - currency
+        - requiredDocuments
+        - maxStay
+        - validity
+        - isFeatured
+
+    VisaType:
+      type: object
+      properties:
+        type:
+          type: string
+        label:
+          type: string
+        duration:
+          type: string
+        fee:
+          type: number
+      required:
+        - type
+        - label
+        - duration
+        - fee
+
+    Application:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        countryCode:
+          type: string
+        countryName:
+          type: string
+        countryFlag:
+          type: string
+        visaType:
+          type: string
+        status:
+          type: string
+          enum: [draft, submitted, under_review, approved, rejected]
+        travelDate:
+          type: string
+          nullable: true
+        returnDate:
+          type: string
+          nullable: true
+        purpose:
+          type: string
+          nullable: true
+        passportNumber:
+          type: string
+          nullable: true
+        passportExpiry:
+          type: string
+          nullable: true
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+        dateOfBirth:
+          type: string
+          nullable: true
+        gender:
+          type: string
+          nullable: true
+        occupation:
+          type: string
+          nullable: true
+        hotelName:
+          type: string
+          nullable: true
+        hotelAddress:
+          type: string
+          nullable: true
+        fee:
+          type: number
+        referenceNumber:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        submittedAt:
+          type: string
+          nullable: true
+        approvedAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - userId
+        - countryCode
+        - countryName
+        - countryFlag
+        - visaType
+        - status
+        - fee
+        - createdAt
+        - updatedAt
+
+    ApplicationListResponse:
+      type: object
+      properties:
+        applications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Application"
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+      required:
+        - applications
+        - total
+        - limit
+        - offset
+
+    CreateApplicationBody:
+      type: object
+      properties:
+        countryCode:
+          type: string
+        visaType:
+          type: string
+        travelDate:
+          type: string
+          nullable: true
+        returnDate:
+          type: string
+          nullable: true
+        purpose:
+          type: string
+          nullable: true
+      required:
+        - countryCode
+        - visaType
+
+    UpdateApplicationBody:
+      type: object
+      properties:
+        travelDate:
+          type: string
+          nullable: true
+        returnDate:
+          type: string
+          nullable: true
+        purpose:
+          type: string
+          nullable: true
+        passportNumber:
+          type: string
+          nullable: true
+        passportExpiry:
+          type: string
+          nullable: true
+        firstName:
+          type: string
+          nullable: true
+        lastName:
+          type: string
+          nullable: true
+        dateOfBirth:
+          type: string
+          nullable: true
+        gender:
+          type: string
+          nullable: true
+        occupation:
+          type: string
+          nullable: true
+        hotelName:
+          type: string
+          nullable: true
+        hotelAddress:
+          type: string
+          nullable: true
+
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+        applicationId:
+          type: integer
+        type:
+          type: string
+        filename:
+          type: string
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        size:
+          type: integer
+        url:
+          type: string
+        uploadedAt:
+          type: string
+      required:
+        - id
+        - applicationId
+        - type
+        - filename
+        - originalName
+        - mimeType
+        - size
+        - url
+        - uploadedAt
+
+    UploadDocumentBody:
+      type: object
+      properties:
+        type:
+          type: string
+        filename:
+          type: string
+        originalName:
+          type: string
+        mimeType:
+          type: string
+        size:
+          type: integer
+        dataUrl:
+          type: string
+      required:
+        - type
+        - filename
+        - originalName
+        - mimeType
+        - size
+        - dataUrl
+
+    DashboardSummary:
+      type: object
+      properties:
+        totalApplications:
+          type: integer
+        pending:
+          type: integer
+        approved:
+          type: integer
+        rejected:
+          type: integer
+        drafts:
+          type: integer
+        recentCountries:
+          type: array
+          items:
+            type: string
+        successRate:
+          type: number
+      required:
+        - totalApplications
+        - pending
+        - approved
+        - rejected
+        - drafts
+        - recentCountries
+        - successRate
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [application_created, application_submitted, status_changed, document_uploaded]
+        applicationId:
+          type: integer
+        countryName:
+          type: string
+        countryFlag:
+          type: string
+        description:
+          type: string
+        timestamp:
+          type: string
+      required:
+        - id
+        - type
+        - applicationId
+        - countryName
+        - countryFlag
+        - description
+        - timestamp
