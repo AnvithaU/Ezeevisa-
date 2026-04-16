@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
+import { GoogleLogin } from "@react-oauth/google";
 import { useRegister } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Globe, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { customFetch } from "@/lib/customFetch";
 
 interface RegisterForm {
   firstName: string;
@@ -19,6 +21,7 @@ interface RegisterForm {
 export default function Register() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { login } = useAuth();
 
@@ -54,6 +57,28 @@ export default function Register() {
     );
   };
 
+  const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
+    if (!credentialResponse.credential) {
+      setError("Google sign-in failed. Please try again.");
+      return;
+    }
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      const res = await customFetch<{ token: string; user: any }>("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
+      login(res.token, res.user);
+      setLocation("/dashboard");
+    } catch (err: any) {
+      setError(err?.data?.error || "Google sign-in failed. Please try again.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   const passwordStrength = password
     ? password.length >= 12
       ? "strong"
@@ -70,7 +95,6 @@ export default function Register() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
         >
-          {/* Logo */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-6">
               <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
@@ -97,6 +121,32 @@ export default function Register() {
                 {error}
               </motion.div>
             )}
+
+            <div className="flex justify-center mb-4">
+              {googleLoading ? (
+                <div className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-background border border-input rounded-lg text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Signing up with Google...
+                </div>
+              ) : (
+                <div className="w-full [&>div]:w-full [&>div>div]:w-full [&_iframe]:w-full">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={() => setError("Google sign-in failed. Please try again.")}
+                    width="100%"
+                    text="signup_with"
+                    shape="rectangular"
+                    theme="outline"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or sign up with email</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div className="grid grid-cols-2 gap-3">

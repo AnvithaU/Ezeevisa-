@@ -1,5 +1,6 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -18,6 +19,8 @@ import Applications from "@/pages/Applications";
 import ApplicationDetail from "@/pages/ApplicationDetail";
 import Track from "@/pages/Track";
 import NotFound from "@/pages/NotFound";
+import { useEffect, useState } from "react";
+import { customFetch } from "@/lib/customFetch";
 
 setAuthTokenGetter(() => getToken());
 
@@ -87,15 +90,25 @@ function Router() {
 }
 
 function App() {
+  const [googleClientId, setGoogleClientId] = useState("");
+
+  useEffect(() => {
+    customFetch<{ googleClientId: string }>("/api/auth/config")
+      .then((data) => setGoogleClientId(data.googleClientId))
+      .catch(() => {});
+  }, []);
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </GoogleOAuthProvider>
   );
 }
 

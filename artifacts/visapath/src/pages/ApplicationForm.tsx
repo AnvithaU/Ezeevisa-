@@ -24,8 +24,11 @@ import {
   X,
   FileText,
   AlertCircle,
+  ScanLine,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { customFetch } from "@/lib/customFetch";
 
 const STEPS = [
   { id: 1, label: "Travel Details" },
@@ -57,7 +60,51 @@ export default function ApplicationForm() {
   const deleteDocMutation = useDeleteDocument();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ocrInputRef = useRef<HTMLInputElement>(null);
   const [uploadingType, setUploadingType] = useState<string | null>(null);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrSuccess, setOcrSuccess] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+
+  const handleOcrScan = async (file: File) => {
+    setOcrLoading(true);
+    setOcrError(null);
+    setOcrSuccess(false);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const dataUrl = reader.result as string;
+        const extracted = await customFetch<{
+          firstName: string;
+          lastName: string;
+          passportNumber: string;
+          dateOfBirth: string;
+          passportExpiry: string;
+          gender: string;
+        }>("/api/ocr/passport", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dataUrl }),
+        });
+        setFormData((prev) => ({
+          ...prev,
+          ...(extracted.firstName ? { firstName: extracted.firstName } : {}),
+          ...(extracted.lastName ? { lastName: extracted.lastName } : {}),
+          ...(extracted.passportNumber ? { passportNumber: extracted.passportNumber } : {}),
+          ...(extracted.dateOfBirth ? { dateOfBirth: extracted.dateOfBirth } : {}),
+          ...(extracted.passportExpiry ? { passportExpiry: extracted.passportExpiry } : {}),
+          ...(extracted.gender ? { gender: extracted.gender } : {}),
+        }));
+        setOcrSuccess(true);
+        setTimeout(() => setOcrSuccess(false), 4000);
+      } catch {
+        setOcrError("Could not read passport. Please fill in details manually.");
+      } finally {
+        setOcrLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const [formData, setFormData] = useState({
     travelDate: app?.travelDate ?? "",
@@ -310,7 +357,53 @@ export default function ApplicationForm() {
 
           {step === 2 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-foreground text-lg">Personal Information</h2>
+              <div className="flex items-start justify-between gap-4">
+                <h2 className="font-semibold text-foreground text-lg">Personal Information</h2>
+                <button
+                  type="button"
+                  disabled={ocrLoading}
+                  onClick={() => {
+                    const input = document.createElement("input");
+                    input.type = "file";
+                    input.accept = "image/*,.pdf";
+                    input.onchange = (e) => {
+                      const file = (e.target as HTMLInputElement).files?.[0];
+                      if (file) handleOcrScan(file);
+                    };
+                    input.click();
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-medium rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-60 flex-shrink-0"
+                >
+                  {ocrLoading ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Scanning...</>
+                  ) : (
+                    <><ScanLine className="w-3.5 h-3.5" /> Scan Passport</>
+                  )}
+                </button>
+              </div>
+
+              {ocrSuccess && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700"
+                >
+                  <Sparkles className="w-4 h-4 flex-shrink-0" />
+                  Passport scanned successfully! Please verify the details below.
+                </motion.div>
+              )}
+
+              {ocrError && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  {ocrError}
+                </motion.div>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">First Name (as on passport)</label>

@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useForm } from "react-hook-form";
+import { GoogleLogin } from "@react-oauth/google";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Globe, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { customFetch } from "@/lib/customFetch";
 
 interface LoginForm {
   email: string;
@@ -15,6 +17,7 @@ interface LoginForm {
 export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [, setLocation] = useLocation();
   const { login } = useAuth();
 
@@ -37,6 +40,28 @@ export default function Login() {
     );
   };
 
+  const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
+    if (!credentialResponse.credential) {
+      setError("Google sign-in failed. Please try again.");
+      return;
+    }
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      const res = await customFetch<{ token: string; user: any }>("/api/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
+      login(res.token, res.user);
+      setLocation("/dashboard");
+    } catch (err: any) {
+      setError(err?.data?.error || "Google sign-in failed. Please try again.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
@@ -45,7 +70,6 @@ export default function Login() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35 }}
         >
-          {/* Logo */}
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 mb-6">
               <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
@@ -61,7 +85,6 @@ export default function Login() {
             </p>
           </div>
 
-          {/* Card */}
           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             {error && (
               <motion.div
@@ -73,6 +96,32 @@ export default function Login() {
                 {error}
               </motion.div>
             )}
+
+            <div className="flex justify-center">
+              {googleLoading ? (
+                <div className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-background border border-input rounded-lg text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Signing in with Google...
+                </div>
+              ) : (
+                <div className="w-full [&>div]:w-full [&>div>div]:w-full [&_iframe]:w-full">
+                  <GoogleLogin
+                    onSuccess={handleGoogleSuccess}
+                    onError={() => setError("Google sign-in failed. Please try again.")}
+                    width="100%"
+                    text="continue_with"
+                    shape="rectangular"
+                    theme="outline"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">or continue with email</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>

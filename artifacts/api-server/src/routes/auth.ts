@@ -1,11 +1,33 @@
 import { Router, IRouter } from "express";
 import bcrypt from "bcrypt";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
+import { OAuth2Client } from "google-auth-library";
 import { db, usersTable } from "@workspace/db";
 import { RegisterBody, LoginBody } from "@workspace/api-zod";
 import { requireAuth, generateToken, type AuthRequest } from "../middlewares/auth";
 
 const router: IRouter = Router();
+
+const rawGoogleClientId = (process.env.GOOGLE_CLIENT_ID || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
+const googleClient = new OAuth2Client(rawGoogleClientId);
+
+router.get("/auth/config", (_req, res): void => {
+  let clientId = process.env.GOOGLE_CLIENT_ID || "";
+  clientId = clientId.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  res.json({ googleClientId: clientId });
+});
+
+function userResponse(user: typeof usersTable.$inferSelect) {
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    phone: user.phone,
+    avatarUrl: (user as any).avatarUrl ?? null,
+    createdAt: user.createdAt.toISOString(),
+  };
+}
 
 router.post("/auth/register", async (req, res): Promise<void> => {
   const parsed = RegisterBody.safeParse(req.body);
@@ -30,18 +52,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     .returning();
 
   const token = generateToken(user.id);
-
-  res.status(201).json({
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
-      createdAt: user.createdAt.toISOString(),
-    },
-  });
+  res.status(201).json({ token, user: userResponse(user) });
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {
@@ -59,6 +70,11 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
+  if (!user.passwordHash) {
+    res.status(401).json({ error: "This account uses Google Sign-In. Please sign in with Google." });
+    return;
+  }
+
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) {
     res.status(401).json({ error: "Invalid email or password" });
@@ -66,18 +82,68 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   const token = generateToken(user.id);
+  res.json({ token, user: userResponse(user) });
+});
 
-  res.json({
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      phone: user.phone,
-      createdAt: user.createdAt.toISOString(),
-    },
-  });
+router.post("/auth/google", async (req, res): Promise<void> => {
+  const { credential } = req.body;
+  if (!credential) {
+    res.status(400).json({ error: "Google credential is required" });
+    return;
+  }
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: rawGoogleClientId,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      res.status(400).json({ error: "Invalid Google token" });
+      return;
+    }
+
+    const { sub: googleId, email, given_name, family_name, picture } = payload;
+    const firstName = given_name || email.split("@")[0];
+    const lastName = family_name || "";
+
+    const existing = await db
+      .select()
+      .from(usersTable)
+      .where(or(eq(usersTable.googleId, googleId), eq(usersTable.email, email)))
+      .limit(1);
+
+    let user: typeof usersTable.$inferSelect;
+
+    if (existing.length > 0) {
+      const updates: Partial<typeof usersTable.$inferInsert> = { googleId };
+      if (picture) (updates as any).avatarUrl = picture;
+      [user] = await db
+        .update(usersTable)
+        .set(updates as any)
+        .where(eq(usersTable.id, existing[0].id))
+        .returning();
+    } else {
+      [user] = await db
+        .insert(usersTable)
+        .values({
+          email,
+          passwordHash: "",
+          firstName,
+          lastName,
+          googleId,
+          ...(picture ? { avatarUrl: picture } : {}),
+        } as any)
+        .returning();
+    }
+
+    const token = generateToken(user.id);
+    res.json({ token, user: userResponse(user) });
+  } catch (err: any) {
+    console.error("Google auth error:", err);
+    res.status(401).json({ error: "Google authentication failed" });
+  }
 });
 
 router.get("/auth/me", requireAuth, async (req: AuthRequest, res): Promise<void> => {
@@ -92,14 +158,7 @@ router.get("/auth/me", requireAuth, async (req: AuthRequest, res): Promise<void>
     return;
   }
 
-  res.json({
-    id: user.id,
-    email: user.email,
-    firstName: user.firstName,
-    lastName: user.lastName,
-    phone: user.phone,
-    createdAt: user.createdAt.toISOString(),
-  });
+  res.json(userResponse(user));
 });
 
 export default router;
