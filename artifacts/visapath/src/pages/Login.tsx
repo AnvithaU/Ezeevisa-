@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Globe, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { customFetch } from "@/lib/customFetch";
+import { setOtpSession } from "@/lib/otpSession";
 
 interface LoginForm {
   email: string;
@@ -30,8 +31,12 @@ export default function Login() {
       { data },
       {
         onSuccess: (res) => {
-          login(res.token, res.user);
-          setLocation("/dashboard");
+          setOtpSession({
+            pendingToken: res.pendingToken,
+            purpose: "login",
+            email: data.email,
+          });
+          setLocation("/verify-otp");
         },
         onError: (err: any) => {
           setError(err?.data?.error || "Invalid email or password");

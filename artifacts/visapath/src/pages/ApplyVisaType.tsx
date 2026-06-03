@@ -1,6 +1,6 @@
 import { useLocation, useParams } from "wouter";
 import { motion } from "framer-motion";
-import { useGetVisaCountry, useCreateApplication, getListApplicationsQueryKey } from "@workspace/api-client-react";
+import { useGetVisaCountry, useCreateApplication, getListApplicationsQueryKey, getGetVisaCountryQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/utils";
 import { ArrowLeft, Clock, Shield, FileCheck, Check, Loader2, Globe } from "lucide-react";
@@ -13,7 +13,7 @@ export default function ApplyVisaType() {
   const queryClient = useQueryClient();
 
   const { data: country, isLoading } = useGetVisaCountry(countryCode!, {
-    query: { enabled: !!countryCode },
+    query: { enabled: !!countryCode, queryKey: getGetVisaCountryQueryKey(countryCode!) },
   });
 
   const createMutation = useCreateApplication();

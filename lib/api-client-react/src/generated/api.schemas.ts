@@ -42,6 +42,52 @@ export interface AuthResponse {
   user: User;
 }
 
+export type OtpRequiredResponseStatus =
+  (typeof OtpRequiredResponseStatus)[keyof typeof OtpRequiredResponseStatus];
+
+export const OtpRequiredResponseStatus = {
+  otp_required: "otp_required",
+} as const;
+
+export type OtpRequiredResponsePurpose =
+  (typeof OtpRequiredResponsePurpose)[keyof typeof OtpRequiredResponsePurpose];
+
+export const OtpRequiredResponsePurpose = {
+  email_verification: "email_verification",
+  login: "login",
+} as const;
+
+export interface OtpRequiredResponse {
+  status: OtpRequiredResponseStatus;
+  pendingToken: string;
+  purpose: OtpRequiredResponsePurpose;
+}
+
+export interface VerifyOtpBody {
+  pendingToken: string;
+  /**
+   * @minLength 6
+   * @maxLength 6
+   */
+  code: string;
+}
+
+export interface ResendOtpBody {
+  pendingToken: string;
+}
+
+export type ResendOtpResponseStatus =
+  (typeof ResendOtpResponseStatus)[keyof typeof ResendOtpResponseStatus];
+
+export const ResendOtpResponseStatus = {
+  otp_sent: "otp_sent",
+} as const;
+
+export interface ResendOtpResponse {
+  status: ResendOtpResponseStatus;
+  message: string;
+}
+
 export interface VisaType {
   type: string;
   label: string;

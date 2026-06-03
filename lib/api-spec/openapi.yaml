@@ -39,7 +39,7 @@ paths:
     post:
       operationId: register
       tags: [auth]
-      summary: Register a new user
+      summary: Register a new user and send an email verification OTP
       requestBody:
         required: true
         content:
@@ -47,12 +47,12 @@ paths:
             schema:
               $ref: "#/components/schemas/RegisterBody"
       responses:
-        "201":
-          description: User created
+        "200":
+          description: Account created, OTP sent for email verification
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthResponse"
+                $ref: "#/components/schemas/OtpRequiredResponse"
         "400":
           description: Validation error
           content:
@@ -70,7 +70,7 @@ paths:
     post:
       operationId: login
       tags: [auth]
-      summary: Login with email and password
+      summary: Login with email and password, sending a login OTP
       requestBody:
         required: true
         content:
@@ -79,13 +79,75 @@ paths:
               $ref: "#/components/schemas/LoginBody"
       responses:
         "200":
-          description: Login successful
+          description: Credentials valid, OTP sent for two-factor verification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpRequiredResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/verify-otp:
+    post:
+      operationId: verifyOtp
+      tags: [auth]
+      summary: Verify an OTP code and receive an auth token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyOtpBody"
+      responses:
+        "200":
+          description: OTP verified, authentication successful
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthResponse"
+        "400":
+          description: Invalid or expired code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "401":
-          description: Invalid credentials
+          description: Invalid or expired pending token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/resend-otp:
+    post:
+      operationId: resendOtp
+      tags: [auth]
+      summary: Resend an OTP code (rate-limited)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendOtpBody"
+      responses:
+        "200":
+          description: A new OTP was sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResendOtpResponse"
+        "401":
+          description: Invalid or expired pending token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Too many requests, wait before retrying
           content:
             application/json:
               schema:
@@ -585,6 +647,55 @@ components:
       required:
         - token
         - user
+
+    OtpRequiredResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [otp_required]
+        pendingToken:
+          type: string
+        purpose:
+          type: string
+          enum: [email_verification, login]
+      required:
+        - status
+        - pendingToken
+        - purpose
+
+    VerifyOtpBody:
+      type: object
+      properties:
+        pendingToken:
+          type: string
+        code:
+          type: string
+          minLength: 6
+          maxLength: 6
+      required:
+        - pendingToken
+        - code
+
+    ResendOtpBody:
+      type: object
+      properties:
+        pendingToken:
+          type: string
+      required:
+        - pendingToken
+
+    ResendOtpResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [otp_sent]
+        message:
+          type: string
+      required:
+        - status
+        - message
 
     User:
       type: object

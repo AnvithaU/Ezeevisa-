@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Globe, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { customFetch } from "@/lib/customFetch";
+import { setOtpSession } from "@/lib/otpSession";
 
 interface RegisterForm {
   firstName: string;
@@ -47,8 +48,12 @@ export default function Register() {
       },
       {
         onSuccess: (res) => {
-          login(res.token, res.user);
-          setLocation("/dashboard");
+          setOtpSession({
+            pendingToken: res.pendingToken,
+            purpose: "email_verification",
+            email: data.email,
+          });
+          setLocation("/verify-otp");
         },
         onError: (err: any) => {
           setError(err?.data?.error || "Registration failed. Please try again.");

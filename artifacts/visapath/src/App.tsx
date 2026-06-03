@@ -11,6 +11,7 @@ import { getToken } from "@/lib/auth";
 import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
+import VerifyOtp from "@/pages/VerifyOtp";
 import Dashboard from "@/pages/Dashboard";
 import ApplyCountries from "@/pages/ApplyCountries";
 import ApplyVisaType from "@/pages/ApplyVisaType";
@@ -44,6 +45,7 @@ function Router() {
           <Route path="/" component={Landing} />
           <Route path="/login" component={Login} />
           <Route path="/register" component={Register} />
+          <Route path="/verify-otp" component={VerifyOtp} />
           <Route path="/track" component={Track} />
 
           <Route path="/dashboard">

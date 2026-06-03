@@ -3,8 +3,16 @@ import bcrypt from "bcrypt";
 import { eq, or } from "drizzle-orm";
 import { OAuth2Client } from "google-auth-library";
 import { db, usersTable } from "@workspace/db";
-import { RegisterBody, LoginBody } from "@workspace/api-zod";
-import { requireAuth, generateToken, type AuthRequest } from "../middlewares/auth";
+import { RegisterBody, LoginBody, VerifyOtpBody, ResendOtpBody } from "@workspace/api-zod";
+import {
+  requireAuth,
+  generateToken,
+  generatePendingToken,
+  verifyPendingToken,
+  type AuthRequest,
+} from "../middlewares/auth";
+import { createOtp, verifyOtp, getResendWaitSeconds } from "../lib/otp";
+import { sendOtpEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
@@ -48,11 +56,29 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
   const [user] = await db
     .insert(usersTable)
-    .values({ email, passwordHash, firstName, lastName, phone: phone ?? null })
+    .values({
+      email,
+      passwordHash,
+      firstName,
+      lastName,
+      phone: phone ?? null,
+      emailVerified: false,
+    })
     .returning();
 
-  const token = generateToken(user.id);
-  res.status(201).json({ token, user: userResponse(user) });
+  const code = await createOtp(user.id, "email_verification");
+  try {
+    await sendOtpEmail(user.email, code, "email_verification");
+  } catch (err) {
+    req.log.error({ err }, "Failed to send verification OTP email");
+  }
+
+  const pendingToken = generatePendingToken(user.id, "email_verification");
+  res.status(200).json({
+    status: "otp_required",
+    pendingToken,
+    purpose: "email_verification",
+  });
 });
 
 router.post("/auth/login", async (req, res): Promise<void> => {
@@ -81,8 +107,103 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
+  const code = await createOtp(user.id, "login");
+  try {
+    await sendOtpEmail(user.email, code, "login");
+  } catch (err) {
+    req.log.error({ err }, "Failed to send login OTP email");
+  }
+
+  const pendingToken = generatePendingToken(user.id, "login");
+  res.status(202).json({
+    status: "otp_required",
+    pendingToken,
+    purpose: "login",
+  });
+});
+
+router.post("/auth/verify-otp", async (req, res): Promise<void> => {
+  const parsed = VerifyOtpBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const { pendingToken, code } = parsed.data;
+  const pending = verifyPendingToken(pendingToken);
+  if (!pending) {
+    res.status(401).json({ error: "Your session has expired. Please sign in again." });
+    return;
+  }
+
+  const result = await verifyOtp(pending.userId, pending.purpose, code);
+  if (!result.ok) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+
+  if (pending.purpose === "email_verification") {
+    await db
+      .update(usersTable)
+      .set({ emailVerified: true })
+      .where(eq(usersTable.id, pending.userId));
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, pending.userId))
+    .limit(1);
+
+  if (!user) {
+    res.status(401).json({ error: "Account not found." });
+    return;
+  }
+
   const token = generateToken(user.id);
   res.json({ token, user: userResponse(user) });
+});
+
+router.post("/auth/resend-otp", async (req, res): Promise<void> => {
+  const parsed = ResendOtpBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+
+  const pending = verifyPendingToken(parsed.data.pendingToken);
+  if (!pending) {
+    res.status(401).json({ error: "Your session has expired. Please sign in again." });
+    return;
+  }
+
+  const wait = await getResendWaitSeconds(pending.userId, pending.purpose);
+  if (wait > 0) {
+    res.status(429).json({
+      error: `Please wait ${wait} second${wait === 1 ? "" : "s"} before requesting a new code.`,
+    });
+    return;
+  }
+
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.id, pending.userId))
+    .limit(1);
+
+  if (!user) {
+    res.status(401).json({ error: "Account not found." });
+    return;
+  }
+
+  const code = await createOtp(pending.userId, pending.purpose);
+  try {
+    await sendOtpEmail(user.email, code, pending.purpose);
+  } catch (err) {
+    req.log.error({ err }, "Failed to resend OTP email");
+  }
+
+  res.json({ status: "otp_sent", message: "A new code has been sent to your email." });
 });
 
 router.post("/auth/google", async (req, res): Promise<void> => {
@@ -117,7 +238,10 @@ router.post("/auth/google", async (req, res): Promise<void> => {
     let user: typeof usersTable.$inferSelect;
 
     if (existing.length > 0) {
-      const updates: Partial<typeof usersTable.$inferInsert> = { googleId };
+      const updates: Partial<typeof usersTable.$inferInsert> = {
+        googleId,
+        emailVerified: true,
+      };
       if (picture) (updates as any).avatarUrl = picture;
       [user] = await db
         .update(usersTable)
@@ -133,6 +257,7 @@ router.post("/auth/google", async (req, res): Promise<void> => {
           firstName,
           lastName,
           googleId,
+          emailVerified: true,
           ...(picture ? { avatarUrl: picture } : {}),
         } as any)
         .returning();

@@ -15,7 +15,7 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
- * @summary Register a new user
+ * @summary Register a new user and send an email verification OTP
  */
 export const registerBodyPasswordMin = 8;
 
@@ -27,8 +27,14 @@ export const RegisterBody = zod.object({
   phone: zod.string().optional(),
 });
 
+export const RegisterResponse = zod.object({
+  status: zod.enum(["otp_required"]),
+  pendingToken: zod.string(),
+  purpose: zod.enum(["email_verification", "login"]),
+});
+
 /**
- * @summary Login with email and password
+ * @summary Login with email and password, sending a login OTP
  */
 export const LoginBody = zod.object({
   email: zod.string().email(),
@@ -36,6 +42,23 @@ export const LoginBody = zod.object({
 });
 
 export const LoginResponse = zod.object({
+  status: zod.enum(["otp_required"]),
+  pendingToken: zod.string(),
+  purpose: zod.enum(["email_verification", "login"]),
+});
+
+/**
+ * @summary Verify an OTP code and receive an auth token
+ */
+export const verifyOtpBodyCodeMin = 6;
+export const verifyOtpBodyCodeMax = 6;
+
+export const VerifyOtpBody = zod.object({
+  pendingToken: zod.string(),
+  code: zod.string().min(verifyOtpBodyCodeMin).max(verifyOtpBodyCodeMax),
+});
+
+export const VerifyOtpResponse = zod.object({
   token: zod.string(),
   user: zod.object({
     id: zod.number(),
@@ -45,6 +68,18 @@ export const LoginResponse = zod.object({
     phone: zod.string().nullish(),
     createdAt: zod.coerce.date(),
   }),
+});
+
+/**
+ * @summary Resend an OTP code (rate-limited)
+ */
+export const ResendOtpBody = zod.object({
+  pendingToken: zod.string(),
+});
+
+export const ResendOtpResponse = zod.object({
+  status: zod.enum(["otp_sent"]),
+  message: zod.string(),
 });
 
 /**
