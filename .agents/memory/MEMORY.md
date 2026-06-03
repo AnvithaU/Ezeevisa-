@@ -1,2 +1,1 @@
-- [api-zod barrel collisions](api-zod-barrel-collisions.md) — adding OpenAPI request/response bodies can cause TS2308 in lib/api-zod/src/index.ts; barrel needs explicit zod re-exports.
-- [drizzle-kit push TUI](drizzle-push-tui.md) — push can hang on an interactive prompt; drive it via `script -qec` + piped Enter keystrokes.
+- [DB schema sync](db-schema-sync.md) — live DB can lag the Drizzle schema; `drizzle-kit push` hangs interactively, so apply missing columns/tables with raw SQL via executeSql.

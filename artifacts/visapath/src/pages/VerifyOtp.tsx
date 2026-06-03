@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { motion } from "framer-motion";
 import { useVerifyOtp, useResendOtp } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Globe, Loader2, AlertCircle, MailCheck, ShieldCheck } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Loader2, AlertCircle, CheckCircle2, ArrowRight } from "lucide-react";
 import { getOtpSession, clearOtpSession } from "@/lib/otpSession";
+import AuthShell from "@/components/auth/AuthShell";
 
 const CODE_LENGTH = 6;
 const RESEND_COOLDOWN = 60;
@@ -82,10 +81,8 @@ export default function VerifyOtp() {
       });
       return;
     }
-
     setDigits((prev) => {
       const next = [...prev];
-      // support pasting multiple digits
       const chars = val.split("");
       let i = index;
       for (const ch of chars) {
@@ -130,122 +127,90 @@ export default function VerifyOtp() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
-        >
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center gap-2 mb-6">
-              <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-                <Globe className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-bold text-foreground">
-                Visa<span className="text-primary">Path</span>
-              </span>
-            </div>
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 mb-4">
-              {isRegistration ? (
-                <MailCheck className="w-6 h-6 text-primary" />
-              ) : (
-                <ShieldCheck className="w-6 h-6 text-primary" />
-              )}
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">
-              {isRegistration ? "Verify your email" : "Two-factor verification"}
-            </h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              We sent a 6-digit code to{" "}
-              <span className="font-medium text-foreground">{session.email}</span>
-            </p>
-          </div>
-
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-            {error && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive mb-4"
-              >
-                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                {error}
-              </motion.div>
-            )}
-
-            {info && !error && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="flex items-center gap-2 p-3 bg-primary/10 border border-primary/20 rounded-lg text-sm text-primary mb-4"
-              >
-                <MailCheck className="w-4 h-4 flex-shrink-0" />
-                {info}
-              </motion.div>
-            )}
-
-            <div className="flex justify-center gap-2 sm:gap-3 mb-6">
-              {digits.map((digit, i) => (
-                <input
-                  key={i}
-                  ref={(el) => {
-                    inputsRef.current[i] = el;
-                  }}
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete={i === 0 ? "one-time-code" : "off"}
-                  maxLength={CODE_LENGTH}
-                  value={digit}
-                  onChange={(e) => handleChange(i, e.target.value)}
-                  onKeyDown={(e) => handleKeyDown(i, e)}
-                  disabled={verifyMutation.isPending}
-                  className={cn(
-                    "w-11 h-14 sm:w-12 sm:h-14 text-center text-xl font-semibold bg-background border rounded-xl text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all disabled:opacity-60",
-                    error ? "border-destructive" : "border-input"
-                  )}
-                />
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => submitCode(code)}
-              disabled={code.length !== CODE_LENGTH || verifyMutation.isPending}
-              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
-            >
-              {verifyMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                "Verify"
-              )}
-            </button>
-
-            <div className="mt-5 text-center text-sm text-muted-foreground">
-              Didn't get the code?{" "}
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={cooldown > 0 || resendMutation.isPending}
-                className="text-primary font-medium hover:underline disabled:opacity-60 disabled:cursor-not-allowed disabled:no-underline"
-              >
-                {resendMutation.isPending
-                  ? "Sending..."
-                  : cooldown > 0
-                  ? `Resend in ${cooldown}s`
-                  : "Resend code"}
-              </button>
-            </div>
-          </div>
-
-          <p className="mt-6 text-center text-xs text-muted-foreground">
-            The code expires in 10 minutes. Check your spam folder if you don't see it.
-          </p>
-        </motion.div>
+    <AuthShell>
+      <div className="ezv-form-title">
+        {isRegistration ? "Verify Your Email" : "Two-Factor Verification"}
       </div>
-    </div>
+      <p className="ezv-form-subtitle">
+        We sent a 6-digit code to{" "}
+        <span style={{ color: "var(--ezv-cream)", fontWeight: 500 }}>{session.email}</span>
+      </p>
+
+      {error && (
+        <div className="ezv-alert ezv-alert--err">
+          <AlertCircle size={15} />
+          {error}
+        </div>
+      )}
+      {info && !error && (
+        <div className="ezv-alert ezv-alert--ok">
+          <CheckCircle2 size={15} />
+          {info}
+        </div>
+      )}
+
+      <label className="ezv-field-label" style={{ marginTop: 4 }}>
+        Enter OTP
+      </label>
+      <div className="ezv-otp-boxes">
+        {digits.map((digit, i) => (
+          <input
+            key={i}
+            ref={(el) => {
+              inputsRef.current[i] = el;
+            }}
+            className={`ezv-otp-box ${digit ? "filled" : ""} ${error ? "error" : ""}`}
+            type="text"
+            inputMode="numeric"
+            autoComplete={i === 0 ? "one-time-code" : "off"}
+            maxLength={CODE_LENGTH}
+            value={digit}
+            onChange={(e) => handleChange(i, e.target.value)}
+            onKeyDown={(e) => handleKeyDown(i, e)}
+            disabled={verifyMutation.isPending}
+          />
+        ))}
+      </div>
+
+      <div className="ezv-otp-meta">
+        Didn't receive it?{" "}
+        <button
+          type="button"
+          className="ezv-resend-btn"
+          onClick={handleResend}
+          disabled={cooldown > 0 || resendMutation.isPending}
+        >
+          {resendMutation.isPending
+            ? "Sending..."
+            : cooldown > 0
+            ? `Resend in ${cooldown}s`
+            : "Resend OTP"}
+        </button>
+      </div>
+
+      <button
+        type="button"
+        className="ezv-cta-btn"
+        style={{ marginTop: 18 }}
+        onClick={() => submitCode(code)}
+        disabled={code.length !== CODE_LENGTH || verifyMutation.isPending}
+      >
+        <span className="ezv-btn-inner">
+          {verifyMutation.isPending ? (
+            <>
+              <Loader2 size={16} className="ezv-spin" /> Verifying...
+            </>
+          ) : (
+            <>
+              Verify <ArrowRight size={16} strokeWidth={2.5} />
+            </>
+          )}
+        </span>
+      </button>
+
+      <p className="ezv-otp-note">
+        The code expires in 10 minutes. Check your spam folder if you don't see it.
+      </p>
+    </AuthShell>
   );
 }

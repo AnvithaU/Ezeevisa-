@@ -40,53 +40,59 @@ const queryClient = new QueryClient({
 function Router() {
   return (
     <AuthProvider>
-      <Layout>
-        <Switch>
-          <Route path="/" component={Landing} />
-          <Route path="/login" component={Login} />
-          <Route path="/register" component={Register} />
-          <Route path="/verify-otp" component={VerifyOtp} />
-          <Route path="/track" component={Track} />
+      <Switch>
+        {/* Full-screen auth pages — rendered outside the app Layout/header */}
+        <Route path="/login" component={Login} />
+        <Route path="/register" component={Register} />
+        <Route path="/verify-otp" component={VerifyOtp} />
 
-          <Route path="/dashboard">
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          </Route>
+        <Route>
+          <Layout>
+            <Switch>
+              <Route path="/" component={Landing} />
+              <Route path="/track" component={Track} />
 
-          <Route path="/apply">
-            <ApplyCountries />
-          </Route>
+              <Route path="/dashboard">
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              </Route>
 
-          <Route path="/apply/:countryCode">
-            {(params) => <ApplyVisaType key={params.countryCode} />}
-          </Route>
+              <Route path="/apply">
+                <ApplyCountries />
+              </Route>
 
-          <Route path="/apply/:countryCode/:visaType/form/:id">
-            {(params) => (
-              <ProtectedRoute>
-                <ApplicationForm key={params.id} />
-              </ProtectedRoute>
-            )}
-          </Route>
+              <Route path="/apply/:countryCode">
+                {(params) => <ApplyVisaType key={params.countryCode} />}
+              </Route>
 
-          <Route path="/applications">
-            <ProtectedRoute>
-              <Applications />
-            </ProtectedRoute>
-          </Route>
+              <Route path="/apply/:countryCode/:visaType/form/:id">
+                {(params) => (
+                  <ProtectedRoute>
+                    <ApplicationForm key={params.id} />
+                  </ProtectedRoute>
+                )}
+              </Route>
 
-          <Route path="/applications/:id">
-            {(params) => (
-              <ProtectedRoute>
-                <ApplicationDetail key={params.id} />
-              </ProtectedRoute>
-            )}
-          </Route>
+              <Route path="/applications">
+                <ProtectedRoute>
+                  <Applications />
+                </ProtectedRoute>
+              </Route>
 
-          <Route component={NotFound} />
-        </Switch>
-      </Layout>
+              <Route path="/applications/:id">
+                {(params) => (
+                  <ProtectedRoute>
+                    <ApplicationDetail key={params.id} />
+                  </ProtectedRoute>
+                )}
+              </Route>
+
+              <Route component={NotFound} />
+            </Switch>
+          </Layout>
+        </Route>
+      </Switch>
     </AuthProvider>
   );
 }
