@@ -1,0 +1,98 @@
+Approved. Proceed with implementation.
+
+GOALS
+
+1. Create a unified EZEEVISA design system across the entire platform.
+2. Ensure registration, email verification, login, and authentication flows are production-ready.
+3. Preserve all existing backend functionality and routes.
+
+AUTHENTICATION REQUIREMENTS
+
+Registration Flow:
+Register
+→ Email OTP Verification
+→ Email Verified
+→ Account Activated
+→ Dashboard
+
+Login Flow:
+Email + Password
+→ Dashboard
+
+Requirements:
+
+* Email verification required only during registration.
+* Do not require OTP on every login.
+* Preserve password hashing, JWT sessions, OTP hashing, expiry, and security controls.
+* Preserve Google login functionality.
+* Prevent unverified users from accessing protected areas.
+* Add proper user-facing error messages when email delivery fails.
+* Remove silent authentication failures.
+
+EMAIL DELIVERY
+
+* Keep the current OTP architecture.
+* Prepare the application for SMTP or Resend integration.
+* Clearly document required environment variables.
+* Update all verification emails to match EZEEVISA branding.
+* Create professional navy/gold email templates.
+
+DESIGN SYSTEM
+
+Use the EZEEVISA authentication pages as the source of truth.
+
+Apply the design language consistently across:
+
+* Layout
+* Header
+* Navigation
+* Footer
+* Landing page
+* Dashboard
+* Application wizard
+* Applications list
+* Application detail pages
+* Tracking pages
+* Status badges
+* Tables
+* Forms
+* Cards
+* Dialogs
+* Toasts
+* Empty states
+* Loading states
+
+Design requirements:
+
+* Navy + gold premium theme
+* Cormorant Garamond headings
+* DM Sans body text
+* Consistent spacing system
+* Consistent shadows and borders
+* Premium glassmorphism where appropriate
+* Smooth animations and transitions
+* Responsive design
+* Professional production-ready appearance
+
+TECHNICAL REQUIREMENTS
+
+* Promote colors, typography, spacing and shadows into global design tokens.
+* Ensure all existing functionality continues to work.
+* Do not break API integrations.
+* Do not break database logic.
+* Do not remove existing business logic.
+
+BEFORE CHANGES
+
+Create a checkpoint.
+
+AFTER COMPLETION
+
+Provide:
+
+1. Files modified.
+2. Design system changes implemented.
+3. Authentication changes implemented.
+4. Email verification flow implemented.
+5. Required environment variables.
+6. Any remaining manual setup steps.

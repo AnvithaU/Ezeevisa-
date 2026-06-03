@@ -8,6 +8,7 @@ export * from "./generated/types";
 export {
   CreateApplicationBody,
   LoginBody,
+  LoginResponse,
   RegisterBody,
   ResendOtpBody,
   ResendOtpResponse,

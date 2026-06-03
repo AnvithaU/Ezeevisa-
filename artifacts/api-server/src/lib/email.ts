@@ -37,33 +37,49 @@ function purposeCopy(purpose: OtpPurpose): { title: string; intro: string } {
 
 function renderOtpHtml(code: string, purpose: OtpPurpose): string {
   const { title, intro } = purposeCopy(purpose);
+  const year = new Date().getFullYear();
   return `<!DOCTYPE html>
-<html>
-  <body style="margin:0;padding:0;background-color:#f7f6f2;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f7f6f2;padding:32px 0;">
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+  </head>
+  <body style="margin:0;padding:0;background-color:#0a1628;font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#0a1628;padding:40px 0;">
       <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e7e5df;">
+        <td align="center" style="padding:0 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#0e1d36;border-radius:24px;overflow:hidden;border:1px solid rgba(201,168,76,0.22);">
+            <!-- Brand bar -->
             <tr>
-              <td style="background-color:#01696f;padding:24px 32px;">
-                <span style="color:#ffffff;font-size:20px;font-weight:700;">Visa<span style="color:#a5e3e6;">Path</span></span>
+              <td style="padding:28px 36px 22px;border-bottom:1px solid rgba(201,168,76,0.16);">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="vertical-align:middle;">
+                      <div style="width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#c9a84c,#8b6914);text-align:center;line-height:42px;color:#0a1628;font-family:Georgia,'Times New Roman',serif;font-size:18px;font-weight:700;">VP</div>
+                    </td>
+                    <td style="vertical-align:middle;padding-left:14px;font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:600;letter-spacing:3px;color:#f5f0e8;">VISA<span style="color:#c9a84c;">PATH</span></td>
+                  </tr>
+                </table>
               </td>
             </tr>
+            <!-- Body -->
             <tr>
-              <td style="padding:32px;">
-                <h1 style="margin:0 0 12px;font-size:20px;color:#1a1a1a;">${title}</h1>
-                <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#555;">${intro}</p>
-                <div style="text-align:center;margin:0 0 24px;">
-                  <div style="display:inline-block;background-color:#f0f6f6;border:1px solid #cfe5e6;border-radius:12px;padding:16px 28px;">
-                    <span style="font-size:32px;font-weight:700;letter-spacing:10px;color:#01696f;">${code}</span>
+              <td style="padding:36px;">
+                <h1 style="margin:0 0 12px;font-family:Georgia,'Times New Roman',serif;font-size:26px;font-weight:600;color:#f5f0e8;">${title}</h1>
+                <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:rgba(245,240,232,0.6);">${intro}</p>
+                <div style="text-align:center;margin:0 0 28px;">
+                  <div style="display:inline-block;background-color:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.3);border-radius:14px;padding:18px 34px;">
+                    <span style="font-size:34px;font-weight:600;letter-spacing:12px;color:#e8c97a;font-family:'DM Sans',Helvetica,Arial,sans-serif;">${code}</span>
                   </div>
                 </div>
-                <p style="margin:0;font-size:13px;line-height:1.6;color:#777;">This code expires in <strong>10 minutes</strong> and can be used only once. Never share it with anyone.</p>
+                <p style="margin:0;font-size:13px;line-height:1.7;color:rgba(245,240,232,0.45);">This code expires in <strong style="color:rgba(245,240,232,0.7);">10 minutes</strong> and can be used only once. If you didn't request it, you can safely ignore this email — never share this code with anyone.</p>
               </td>
             </tr>
+            <!-- Footer -->
             <tr>
-              <td style="padding:16px 32px;border-top:1px solid #eee;">
-                <p style="margin:0;font-size:12px;color:#999;">&copy; ${new Date().getFullYear()} VisaPath — Smart e-Visa Portal</p>
+              <td style="padding:18px 36px;border-top:1px solid rgba(201,168,76,0.12);">
+                <p style="margin:0;font-size:12px;color:rgba(245,240,232,0.35);">&copy; ${year} VisaPath — Smart e-Visa Portal. This is an automated message; please do not reply.</p>
               </td>
             </tr>
           </table>
@@ -80,6 +96,15 @@ export async function sendOtpEmail(
   purpose: OtpPurpose,
 ): Promise<void> {
   if (!transporter) {
+    if (process.env.NODE_ENV === "production") {
+      // Fail closed in production: never log the plaintext code, and throw so
+      // the caller surfaces a 502 instead of silently "succeeding".
+      logger.error(
+        { to, purpose },
+        "SMTP not configured in production — OTP email could not be sent.",
+      );
+      throw new Error("Email delivery is not configured");
+    }
     logger.warn(
       { to, purpose, code },
       "SMTP not configured — OTP email not sent. Code logged for development only.",

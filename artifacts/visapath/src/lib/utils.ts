@@ -39,12 +39,12 @@ export function formatRelativeTime(dateStr: string): string {
 
 export function getStatusColor(status: string): string {
   switch (status) {
-    case "approved": return "text-emerald-700 bg-emerald-50 border-emerald-200";
-    case "rejected": return "text-red-700 bg-red-50 border-red-200";
-    case "under_review": return "text-amber-700 bg-amber-50 border-amber-200";
-    case "submitted": return "text-blue-700 bg-blue-50 border-blue-200";
-    case "draft": return "text-gray-600 bg-gray-50 border-gray-200";
-    default: return "text-gray-600 bg-gray-50 border-gray-200";
+    case "approved": return "text-emerald-300 bg-emerald-500/10 border-emerald-400/30";
+    case "rejected": return "text-red-300 bg-red-500/10 border-red-400/30";
+    case "under_review": return "text-amber-300 bg-amber-500/10 border-amber-400/30";
+    case "submitted": return "text-sky-300 bg-sky-500/10 border-sky-400/30";
+    case "draft": return "text-slate-300 bg-slate-400/10 border-slate-400/25";
+    default: return "text-slate-300 bg-slate-400/10 border-slate-400/25";
   }
 }
 

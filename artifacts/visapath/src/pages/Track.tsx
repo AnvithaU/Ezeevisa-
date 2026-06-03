@@ -65,8 +65,8 @@ export default function Track() {
                 Reference: {refInput}
               </p>
               <div className="flex flex-col items-center py-6 text-center">
-                <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center mb-4">
-                  <Clock className="w-7 h-7 text-amber-600" />
+                <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-400/30 flex items-center justify-center mb-4">
+                  <Clock className="w-7 h-7 text-amber-300" />
                 </div>
                 <p className="font-semibold text-foreground">Application Under Review</p>
                 <p className="text-sm text-muted-foreground mt-2 max-w-xs">

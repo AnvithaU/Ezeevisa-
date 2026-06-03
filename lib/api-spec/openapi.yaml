@@ -65,12 +65,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Verification email could not be sent (account rolled back)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /auth/login:
     post:
       operationId: login
       tags: [auth]
-      summary: Login with email and password, sending a login OTP
+      summary: Login with email and password
+      description: >
+        Verified accounts receive a session token immediately. Unverified
+        accounts receive an OTP-required response and must complete email
+        verification before a session is issued.
       requestBody:
         required: true
         content:
@@ -79,13 +89,19 @@ paths:
               $ref: "#/components/schemas/LoginBody"
       responses:
         "200":
-          description: Credentials valid, OTP sent for two-factor verification
+          description: Authenticated, or email verification required
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OtpRequiredResponse"
+                $ref: "#/components/schemas/LoginResponse"
         "401":
           description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Verification email could not be sent
           content:
             application/json:
               schema:
@@ -148,6 +164,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "429":
           description: Too many requests, wait before retrying
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: Verification email could not be sent
           content:
             application/json:
               schema:
@@ -663,6 +685,11 @@ components:
         - status
         - pendingToken
         - purpose
+
+    LoginResponse:
+      oneOf:
+        - $ref: "#/components/schemas/AuthResponse"
+        - $ref: "#/components/schemas/OtpRequiredResponse"
 
     VerifyOtpBody:
       type: object

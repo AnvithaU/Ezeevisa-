@@ -171,15 +171,15 @@ export default function ApplicationDetail() {
 
       {/* Approved — download */}
       {app.status === "approved" && (
-        <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-xl mb-6">
+        <div className="flex items-center justify-between p-4 bg-emerald-500/10 border border-emerald-400/30 rounded-xl mb-6">
           <div className="flex items-center gap-3">
-            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
             <div>
-              <p className="font-semibold text-emerald-800">Visa Approved</p>
-              <p className="text-sm text-emerald-700">Your e-visa is ready. Download and carry it when you travel.</p>
+              <p className="font-semibold text-emerald-200">Visa Approved</p>
+              <p className="text-sm text-emerald-300/80">Your e-visa is ready. Download and carry it when you travel.</p>
             </div>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-emerald-950 rounded-lg text-sm font-semibold hover:bg-emerald-400 transition-colors">
             <Download className="w-4 h-4" />
             Download
           </button>

@@ -386,7 +386,7 @@ export default function ApplicationForm() {
                 <motion.div
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700"
+                  className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-400/30 rounded-lg text-sm text-emerald-300"
                 >
                   <Sparkles className="w-4 h-4 flex-shrink-0" />
                   Passport scanned successfully! Please verify the details below.
@@ -397,7 +397,7 @@ export default function ApplicationForm() {
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
-                  className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700"
+                  className="flex items-center gap-2 p-3 bg-amber-500/10 border border-amber-400/30 rounded-lg text-sm text-amber-300"
                 >
                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                   {ocrError}

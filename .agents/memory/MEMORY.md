@@ -1,1 +1,3 @@
 - [DB schema sync](db-schema-sync.md) — live DB can lag the Drizzle schema; `drizzle-kit push` hangs interactively, so apply missing columns/tables with raw SQL via executeSql.
+- [API server no hot-reload](api-server-no-hot-reload.md) — api-server dev runs build+node (not watch); restart the workflow after backend edits or you test stale code.
+- [api-zod barrel collisions](api-zod-barrel-collisions.md) — new OpenAPI *Response schemas can hit TS2308; add the name to the explicit re-export in lib/api-zod/src/index.ts.

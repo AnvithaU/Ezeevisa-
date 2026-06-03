@@ -45,9 +45,14 @@ export default function Login() {
       { data: { email: form.email.trim(), password: form.password } },
       {
         onSuccess: (res) => {
+          if ("token" in res) {
+            login(res.token, res.user);
+            setLocation("/dashboard");
+            return;
+          }
           setOtpSession({
             pendingToken: res.pendingToken,
-            purpose: "login",
+            purpose: res.purpose,
             email: form.email.trim(),
           });
           setLocation("/verify-otp");

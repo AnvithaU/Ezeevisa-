@@ -48,19 +48,19 @@ export default function Dashboard() {
       label: "Pending Review",
       value: summary?.pending ?? 0,
       icon: Clock,
-      color: "bg-amber-50 text-amber-600",
+      color: "bg-amber-500/10 text-amber-300",
     },
     {
       label: "Approved",
       value: summary?.approved ?? 0,
       icon: CheckCircle2,
-      color: "bg-emerald-50 text-emerald-600",
+      color: "bg-emerald-500/10 text-emerald-300",
     },
     {
       label: "Success Rate",
       value: `${summary?.successRate ?? 0}%`,
       icon: TrendingUp,
-      color: "bg-blue-50 text-blue-600",
+      color: "bg-sky-500/10 text-sky-300",
     },
   ];
 
@@ -241,14 +241,14 @@ export default function Dashboard() {
             icon: FileText,
             label: "My Applications",
             desc: "Track and manage all your applications",
-            color: "bg-blue-50 text-blue-600",
+            color: "bg-sky-500/10 text-sky-300",
           },
           {
             href: "/track",
             icon: CheckCircle2,
             label: "Track a Visa",
             desc: "Check status with a reference number",
-            color: "bg-emerald-50 text-emerald-600",
+            color: "bg-emerald-500/10 text-emerald-300",
           },
         ].map((action) => {
           const Icon = action.icon;

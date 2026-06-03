@@ -29,6 +29,7 @@ import type {
   HealthStatus,
   ListApplicationsParams,
   LoginBody,
+  LoginResponse,
   OtpRequiredResponse,
   RegisterBody,
   ResendOtpBody,
@@ -211,7 +212,9 @@ export const useRegister = <
 };
 
 /**
- * @summary Login with email and password, sending a login OTP
+ * Verified accounts receive a session token immediately. Unverified accounts receive an OTP-required response and must complete email verification before a session is issued.
+
+ * @summary Login with email and password
  */
 export const getLoginUrl = () => {
   return `/api/auth/login`;
@@ -220,8 +223,8 @@ export const getLoginUrl = () => {
 export const login = async (
   loginBody: LoginBody,
   options?: RequestInit,
-): Promise<OtpRequiredResponse> => {
-  return customFetch<OtpRequiredResponse>(getLoginUrl(), {
+): Promise<LoginResponse> => {
+  return customFetch<LoginResponse>(getLoginUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
@@ -274,7 +277,7 @@ export type LoginMutationBody = BodyType<LoginBody>;
 export type LoginMutationError = ErrorType<ErrorResponse>;
 
 /**
- * @summary Login with email and password, sending a login OTP
+ * @summary Login with email and password
  */
 export const useLogin = <
   TError = ErrorType<ErrorResponse>,

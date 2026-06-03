@@ -21,6 +21,7 @@ export * from "./healthStatus";
 export * from "./listApplicationsParams";
 export * from "./listApplicationsStatus";
 export * from "./loginBody";
+export * from "./loginResponse";
 export * from "./otpRequiredResponse";
 export * from "./otpRequiredResponsePurpose";
 export * from "./otpRequiredResponseStatus";

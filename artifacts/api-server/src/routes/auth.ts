@@ -71,6 +71,14 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     await sendOtpEmail(user.email, code, "email_verification");
   } catch (err) {
     req.log.error({ err }, "Failed to send verification OTP email");
+    // Roll back the half-created account so the user can retry cleanly.
+    // OTP rows cascade-delete with the user.
+    await db.delete(usersTable).where(eq(usersTable.id, user.id));
+    res.status(502).json({
+      error:
+        "We couldn't send your verification email right now. Please try again in a moment.",
+    });
+    return;
   }
 
   const pendingToken = generatePendingToken(user.id, "email_verification");
@@ -107,19 +115,34 @@ router.post("/auth/login", async (req, res): Promise<void> => {
     return;
   }
 
-  const code = await createOtp(user.id, "login");
-  try {
-    await sendOtpEmail(user.email, code, "login");
-  } catch (err) {
-    req.log.error({ err }, "Failed to send login OTP email");
+  // Unverified accounts must complete email verification before they can
+  // access protected areas. Re-issue a verification OTP and route them through
+  // the same verify-otp flow used at registration.
+  if (!user.emailVerified) {
+    const code = await createOtp(user.id, "email_verification");
+    try {
+      await sendOtpEmail(user.email, code, "email_verification");
+    } catch (err) {
+      req.log.error({ err }, "Failed to send verification OTP email");
+      res.status(502).json({
+        error:
+          "We couldn't send your verification email right now. Please try again in a moment.",
+      });
+      return;
+    }
+
+    const pendingToken = generatePendingToken(user.id, "email_verification");
+    res.status(200).json({
+      status: "otp_required",
+      pendingToken,
+      purpose: "email_verification",
+    });
+    return;
   }
 
-  const pendingToken = generatePendingToken(user.id, "login");
-  res.status(202).json({
-    status: "otp_required",
-    pendingToken,
-    purpose: "login",
-  });
+  // Verified credentials → issue a session directly. No OTP on every login.
+  const token = generateToken(user.id);
+  res.status(200).json({ token, user: userResponse(user) });
 });
 
 router.post("/auth/verify-otp", async (req, res): Promise<void> => {
@@ -201,6 +224,11 @@ router.post("/auth/resend-otp", async (req, res): Promise<void> => {
     await sendOtpEmail(user.email, code, pending.purpose);
   } catch (err) {
     req.log.error({ err }, "Failed to resend OTP email");
+    res.status(502).json({
+      error:
+        "We couldn't send your verification email right now. Please try again in a moment.",
+    });
+    return;
   }
 
   res.json({ status: "otp_sent", message: "A new code has been sent to your email." });

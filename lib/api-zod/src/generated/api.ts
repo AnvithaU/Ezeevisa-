@@ -34,18 +34,33 @@ export const RegisterResponse = zod.object({
 });
 
 /**
- * @summary Login with email and password, sending a login OTP
+ * Verified accounts receive a session token immediately. Unverified accounts receive an OTP-required response and must complete email verification before a session is issued.
+
+ * @summary Login with email and password
  */
 export const LoginBody = zod.object({
   email: zod.string().email(),
   password: zod.string(),
 });
 
-export const LoginResponse = zod.object({
-  status: zod.enum(["otp_required"]),
-  pendingToken: zod.string(),
-  purpose: zod.enum(["email_verification", "login"]),
-});
+export const LoginResponse = zod.union([
+  zod.object({
+    token: zod.string(),
+    user: zod.object({
+      id: zod.number(),
+      email: zod.string(),
+      firstName: zod.string(),
+      lastName: zod.string(),
+      phone: zod.string().nullish(),
+      createdAt: zod.coerce.date(),
+    }),
+  }),
+  zod.object({
+    status: zod.enum(["otp_required"]),
+    pendingToken: zod.string(),
+    purpose: zod.enum(["email_verification", "login"]),
+  }),
+]);
 
 /**
  * @summary Verify an OTP code and receive an auth token

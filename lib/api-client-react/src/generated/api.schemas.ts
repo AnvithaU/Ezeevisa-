@@ -63,6 +63,8 @@ export interface OtpRequiredResponse {
   purpose: OtpRequiredResponsePurpose;
 }
 
+export type LoginResponse = AuthResponse | OtpRequiredResponse;
+
 export interface VerifyOtpBody {
   pendingToken: string;
   /**

@@ -275,28 +275,36 @@ export default function Landing() {
       <section className="py-16 md:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <motion.div
-            className="bg-primary rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8"
+            className="glass-panel rounded-2xl p-8 md:p-12 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden"
             initial={{ opacity: 0, scale: 0.98 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
             transition={{ duration: 0.4 }}
           >
-            <div>
-              <h2 className="text-2xl md:text-3xl font-bold text-primary-foreground">
-                Ready to start your journey?
+            <div
+              className="absolute inset-0 opacity-60 pointer-events-none"
+              style={{
+                background:
+                  "radial-gradient(ellipse 60% 120% at 100% 0%, hsl(43 54% 54% / 0.12), transparent 60%)",
+              }}
+            />
+            <div className="relative">
+              <h2 className="text-2xl md:text-3xl font-serif font-semibold text-foreground">
+                Ready to start your{" "}
+                <span className="text-gold-gradient">journey?</span>
               </h2>
-              <p className="mt-3 text-primary-foreground/70 max-w-md">
+              <p className="mt-3 text-muted-foreground max-w-md">
                 Join thousands of Indian travelers who get their e-visas quickly and hassle-free through VisaPath.
               </p>
             </div>
-            <div className="flex items-center gap-3 flex-shrink-0">
+            <div className="relative flex items-center gap-3 flex-shrink-0">
               <Link href="/register">
-                <div className="px-6 py-3 bg-white text-primary rounded-lg font-semibold hover:bg-white/95 transition-colors cursor-pointer">
+                <div className="px-6 py-3 bg-gold-gradient text-[hsl(217_60%_10%)] rounded-lg font-semibold hover:brightness-110 transition-all cursor-pointer shadow-md">
                   Create Free Account
                 </div>
               </Link>
               <Link href="/apply">
-                <div className="px-6 py-3 border border-white/30 text-white rounded-lg font-medium hover:bg-white/10 transition-colors cursor-pointer">
+                <div className="px-6 py-3 border border-primary/40 text-foreground rounded-lg font-medium hover:bg-primary/10 transition-colors cursor-pointer">
                   Browse Countries
                 </div>
               </Link>
