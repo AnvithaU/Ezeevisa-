@@ -20,6 +20,14 @@ path = "scripts/post-merge.sh"
 timeoutMs = 20000
 
 [[ports]]
+localPort = 3000
+externalPort = 6000
+
+[[ports]]
+localPort = 5173
+externalPort = 6800
+
+[[ports]]
 localPort = 8080
 externalPort = 8080
 
@@ -57,3 +65,4 @@ externalPort = 5000
 
 [nix]
 channel = "stable-25_05"
+packages = ["lsof"]

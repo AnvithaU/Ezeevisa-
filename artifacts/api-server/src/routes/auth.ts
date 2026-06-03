@@ -3,7 +3,12 @@ import bcrypt from "bcrypt";
 import { eq, or } from "drizzle-orm";
 import { OAuth2Client } from "google-auth-library";
 import { db, usersTable } from "@workspace/db";
-import { RegisterBody, LoginBody, VerifyOtpBody, ResendOtpBody } from "@workspace/api-zod";
+import {
+  RegisterBody,
+  LoginBody,
+  VerifyOtpBody,
+  ResendOtpBody,
+} from "@workspace/api-zod";
 import {
   requireAuth,
   generateToken,
@@ -16,7 +21,9 @@ import { sendOtpEmail } from "../lib/email";
 
 const router: IRouter = Router();
 
-const rawGoogleClientId = (process.env.GOOGLE_CLIENT_ID || "").replace(/^https?:\/\//, "").replace(/\/$/, "");
+const rawGoogleClientId = (process.env.GOOGLE_CLIENT_ID || "")
+  .replace(/^https?:\/\//, "")
+  .replace(/\/$/, "");
 const googleClient = new OAuth2Client(rawGoogleClientId);
 
 router.get("/auth/config", (_req, res): void => {
@@ -46,7 +53,11 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
   const { email, password, firstName, lastName, phone } = parsed.data;
 
-  const existing = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  const existing = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1);
   if (existing.length > 0) {
     res.status(409).json({ error: "Email already in use" });
     return;
@@ -67,8 +78,13 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     .returning();
 
   const code = await createOtp(user.id, "email_verification");
+  console.log("OTP GENERATED:", code);
   try {
+    console.log("ABOUT TO SEND EMAIL TO:", user.email);
+
     await sendOtpEmail(user.email, code, "email_verification");
+
+    console.log("EMAIL FUNCTION FINISHED");
   } catch (err) {
     req.log.error({ err }, "Failed to send verification OTP email");
     // Roll back the half-created account so the user can retry cleanly.
@@ -98,14 +114,20 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 
   const { email, password } = parsed.data;
 
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.email, email)).limit(1);
+  const [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, email))
+    .limit(1);
   if (!user) {
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
 
   if (!user.passwordHash) {
-    res.status(401).json({ error: "This account uses Google Sign-In. Please sign in with Google." });
+    res.status(401).json({
+      error: "This account uses Google Sign-In. Please sign in with Google.",
+    });
     return;
   }
 
@@ -155,7 +177,9 @@ router.post("/auth/verify-otp", async (req, res): Promise<void> => {
   const { pendingToken, code } = parsed.data;
   const pending = verifyPendingToken(pendingToken);
   if (!pending) {
-    res.status(401).json({ error: "Your session has expired. Please sign in again." });
+    res
+      .status(401)
+      .json({ error: "Your session has expired. Please sign in again." });
     return;
   }
 
@@ -196,7 +220,9 @@ router.post("/auth/resend-otp", async (req, res): Promise<void> => {
 
   const pending = verifyPendingToken(parsed.data.pendingToken);
   if (!pending) {
-    res.status(401).json({ error: "Your session has expired. Please sign in again." });
+    res
+      .status(401)
+      .json({ error: "Your session has expired. Please sign in again." });
     return;
   }
 
@@ -231,7 +257,10 @@ router.post("/auth/resend-otp", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json({ status: "otp_sent", message: "A new code has been sent to your email." });
+  res.json({
+    status: "otp_sent",
+    message: "A new code has been sent to your email.",
+  });
 });
 
 router.post("/auth/google", async (req, res): Promise<void> => {
@@ -299,19 +328,23 @@ router.post("/auth/google", async (req, res): Promise<void> => {
   }
 });
 
-router.get("/auth/me", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, req.userId!))
-    .limit(1);
+router.get(
+  "/auth/me",
+  requireAuth,
+  async (req: AuthRequest, res): Promise<void> => {
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, req.userId!))
+      .limit(1);
 
-  if (!user) {
-    res.status(401).json({ error: "User not found" });
-    return;
-  }
+    if (!user) {
+      res.status(401).json({ error: "User not found" });
+      return;
+    }
 
-  res.json(userResponse(user));
-});
+    res.json(userResponse(user));
+  },
+);
 
 export default router;
