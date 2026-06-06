@@ -13,11 +13,15 @@
     --cream: #F5F0E8; --text-muted: rgba(245,240,232,0.55);
     --err: #e05a5a; --ok: #4caf7d;
   }
-  body { font-family:'DM Sans',sans-serif; background:var(--navy); min-height:100vh; display:flex; overflow:hidden; position:relative; }
-  .bg-layer { position:fixed; inset:0; z-index:0;
-    background: radial-gradient(ellipse 80% 80% at 20% 50%,#0d2244 0%,transparent 60%),
-                radial-gradient(ellipse 60% 60% at 80% 20%,#0f1e3a 0%,transparent 50%),
-                radial-gradient(ellipse 70% 70% at 60% 80%,#071020 0%,transparent 60%), var(--navy); }
+  body { font-family:'DM Sans',sans-serif; background:#f5f0e8; min-height:100vh; display:flex; overflow:hidden; position:relative; }
+  .bg-layer { position:relative; inset:0; z-index:0;
+    background: radial-gradient(ellipse 80% 80% at 15% 0%,rgba(201,168,76,0.06) 0%,transparent 55%
+                radial-gradient(ellipse 70% 60% at 85% 10%,0%, rgba(232,201,122,0.05) 0%,
+                transparent 50%),
+                
+                radial-gradient(ellipse 90% 70% at 50% 100%,rgba(201,168,76,0.04) 0%,
+                transparent 60%), #f5f0e8;
+                }
   .globe-ring { position:fixed; border-radius:50%; border:1px solid rgba(201,168,76,0.12); animation:rotateRing linear infinite; pointer-events:none; }
   .globe-ring:nth-child(1){ width:520px;height:520px;top:50%;left:5%;transform:translate(-50%,-50%);animation-duration:30s; }
   .globe-ring:nth-child(2){ width:700px;height:700px;top:50%;left:5%;transform:translate(-50%,-50%);animation-duration:45s;border-color:rgba(201,168,76,0.07); }
@@ -180,6 +184,18 @@
   .toast-icon svg { width:18px;height:18px; }
   .v-divider { position:absolute;left:48%;top:10%;height:80%;width:1px;background:linear-gradient(to bottom,transparent,rgba(201,168,76,0.2) 30%,rgba(201,168,76,0.2) 70%,transparent);z-index:1; }
   @keyframes fadeUp { from{opacity:0;transform:translateY(18px)} to{opacity:1;transform:translateY(0)} }
+
+.logo-img {
+  height: 28px;
+  width: auto;
+  transition: all 0.3s ease;
+}
+
+.logo-img:hover {
+  transform: scale(1.05) translateY(-1px);
+  filter: drop-shadow(0 8px 18px rgba(201,168,76,0.25));
+}
+  
 </style>
 </head>
 <body>
@@ -188,8 +204,8 @@
 <div class="v-divider"></div>
 <div class="left-panel">
   <div class="logo-mark">
-    <div class="logo-icon">EV</div>
-    <div class="logo-text">EZE<span>VISA</span></div>
+    <img src="logo/EzeVisa-Logo.png" class="logo-img" />
+    <div class="logo-text">Eze<span>Visas</span></div>
   </div>
   <div class="hero-tag">&#10022; Global Visa Solutions</div>
   <h1 class="hero-title">Your World,<br><em>Seamlessly</em><span class="line2">Connected.</span></h1>
@@ -324,8 +340,14 @@ function otpKeydown(e,idx){if(e.key==='Backspace'&&!document.getElementById('otp
 function getEnteredOTP(){let o='';for(let i=0;i<6;i++)o+=(document.getElementById('otp'+i)?.value||'');return o;}
 function handleSubmit(){
   const isSignup=currentMode==='signup';let valid=true;
-  if(isSignup){if(!validateField('fullName'))valid=false;if(!validateField('email'))valid=false;if(!validateField('phone'))valid=false;if(!valid)return;if(!otpSent){showToast('Please send and verify OTP first',true);return;}const entered=getEnteredOTP();if(entered.length<6){document.getElementById('otp_err').textContent='Please enter all 6 OTP digits';document.getElementById('otp_err').classList.add('show');return;}if(entered!==otpValue){document.getElementById('otp_err').textContent='Incorrect OTP - please try again';document.getElementById('otp_err').classList.add('show');for(let i=0;i<6;i++){const b=document.getElementById('otp'+i);if(b)b.classList.add('error');}return;}document.getElementById('otp_err').classList.remove('show');if(!validateField('password'))valid=false;if(!validateField('confirmPass'))valid=false;if(!valid)return;showToast('Account created! Welcome to EZEVISA');}
-  else{if(!validateField('email'))valid=false;const pw=document.getElementById('password')?.value?.trim();if(!pw){showErr('password','Password is required');valid=false;}if(!valid)return;showToast('Welcome back! Signing you in...');}
+  if(isSignup){if(!validateField('fullName'))valid=false;if(!validateField('email'))valid=false;if(!validateField('phone'))valid=false;if(!valid)return;if(!otpSent){showToast('Please send and verify OTP first',true);return;}const entered=getEnteredOTP();if(entered.length<6){document.getElementById('otp_err').textContent='Please enter all 6 OTP digits';document.getElementById('otp_err').classList.add('show');return;}if(entered!==otpValue){document.getElementById('otp_err').textContent='Incorrect OTP - please try again';document.getElementById('otp_err').classList.add('show');for(let i=0;i<6;i++){const b=document.getElementById('otp'+i);if(b)b.classList.add('error');}return;}document.getElementById('otp_err').classList.remove('show');if(!validateField('password'))valid=false;if(!validateField('confirmPass'))valid=false;if(!valid)return;showToast('Account created! Redirecting...');
+setTimeout(() => {
+}, 800);}
+  else{if(!validateField('email'))valid=false;const pw=document.getElementById('password')?.value?.trim();if(!pw){showErr('password','Password is required');valid=false;}if(!valid)return;
+ showToast('Welcome back! Signing you in...');
+setTimeout(() => {
+  // or "/apply"
+}, 800); }
 }
 function forgotPw(){const email=document.getElementById('email')?.value?.trim();if(email)showToast('Reset instructions sent!');else showToast('Enter your email first',true);}
 let toastTimer;

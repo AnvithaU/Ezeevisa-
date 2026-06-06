@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "VisaPath — Smart e-Visa Portal"
+title = "EzeVisas — Smart e-Visa Portal"
 version = "1.0.0"
 id = "artifacts/visapath"
 router = "path"

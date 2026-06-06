@@ -43,6 +43,7 @@ function Router() {
       <Switch>
         {/* Full-screen auth pages — rendered outside the app Layout/header */}
         <Route path="/login" component={Login} />
+        <Route path="/signin" component={Login} />
         <Route path="/register" component={Register} />
         <Route path="/verify-otp" component={VerifyOtp} />
 

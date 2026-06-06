@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
+import { useEffect } from "react";
 import {
   useGetApplication,
   useUpdateApplication,
@@ -46,12 +47,16 @@ export default function ApplicationForm() {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const today = new Date().toISOString().split("T")[0];
 
   const { data: app, isLoading } = useGetApplication(appId, {
     query: { enabled: !!appId, queryKey: getGetApplicationQueryKey(appId) },
   });
   const { data: documents } = useListApplicationDocuments(appId, {
-    query: { enabled: !!appId, queryKey: getListApplicationDocumentsQueryKey(appId) },
+    query: {
+      enabled: !!appId,
+      queryKey: getListApplicationDocumentsQueryKey(appId),
+    },
   });
 
   const updateMutation = useUpdateApplication();
@@ -59,21 +64,24 @@ export default function ApplicationForm() {
   const uploadMutation = useUploadDocument();
   const deleteDocMutation = useDeleteDocument();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const ocrInputRef = useRef<HTMLInputElement>(null);
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrSuccess, setOcrSuccess] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleOcrScan = async (file: File) => {
     setOcrLoading(true);
     setOcrError(null);
     setOcrSuccess(false);
     const reader = new FileReader();
+
     reader.onload = async () => {
       try {
-        const dataUrl = reader.result as string;
+        const dataUrl = typeof reader.result === "string" ? reader.result : "";
+
+        if (!dataUrl) throw new Error("File read failed");
+
         const extracted = await customFetch<{
           firstName: string;
           lastName: string;
@@ -86,26 +94,31 @@ export default function ApplicationForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dataUrl }),
         });
+
+        console.log("OCR extracted:", extracted);
+
         setFormData((prev) => ({
           ...prev,
-          ...(extracted.firstName ? { firstName: extracted.firstName } : {}),
-          ...(extracted.lastName ? { lastName: extracted.lastName } : {}),
-          ...(extracted.passportNumber ? { passportNumber: extracted.passportNumber } : {}),
-          ...(extracted.dateOfBirth ? { dateOfBirth: extracted.dateOfBirth } : {}),
-          ...(extracted.passportExpiry ? { passportExpiry: extracted.passportExpiry } : {}),
-          ...(extracted.gender ? { gender: extracted.gender } : {}),
+          firstName: extracted?.firstName || prev.firstName,
+          lastName: extracted?.lastName || prev.lastName,
+          passportNumber: extracted?.passportNumber || prev.passportNumber,
+          dateOfBirth: extracted?.dateOfBirth || prev.dateOfBirth,
+          passportExpiry: extracted?.passportExpiry || prev.passportExpiry,
+          gender: extracted?.gender || prev.gender,
         }));
+
         setOcrSuccess(true);
         setTimeout(() => setOcrSuccess(false), 4000);
-      } catch {
-        setOcrError("Could not read passport. Please fill in details manually.");
+      } catch (err) {
+        console.error(err);
+        setOcrError("Could not read passport. Please fill manually.");
       } finally {
         setOcrLoading(false);
       }
     };
+
     reader.readAsDataURL(file);
   };
-
   const [formData, setFormData] = useState({
     travelDate: app?.travelDate ?? "",
     returnDate: app?.returnDate ?? "",
@@ -119,70 +132,161 @@ export default function ApplicationForm() {
     occupation: app?.occupation ?? "",
     hotelName: app?.hotelName ?? "",
     hotelAddress: app?.hotelAddress ?? "",
+    purposeOther: "",
   });
+  useEffect(() => {
+    if (!app) return;
+
+    setFormData({
+      travelDate: app.travelDate ?? "",
+      returnDate: app.returnDate ?? "",
+      purpose: app.purpose ?? "",
+      passportNumber: app.passportNumber ?? "",
+      passportExpiry: app.passportExpiry ?? "",
+      firstName: app.firstName ?? "",
+      lastName: app.lastName ?? "",
+      dateOfBirth: app.dateOfBirth ?? "",
+      gender: app.gender ?? "",
+      occupation: app.occupation ?? "",
+      hotelName: app.hotelName ?? "",
+      hotelAddress: app.hotelAddress ?? "",
+      purposeOther: "",
+    });
+  }, [app]);
 
   const handleUpdate = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-  };
 
+    // clear error when user starts fixing field
+    if (fieldErrors[field]) {
+      setFieldErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+  };
+  const isStep1Valid = () => {
+    if (!formData.travelDate || !formData.returnDate || !formData.purpose)
+      return false;
+    const travel = new Date(formData.travelDate);
+    const returnD = new Date(formData.returnDate);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    if (travel < now) return false;
+    if (returnD <= travel) return false;
+
+    if (formData.purpose === "other" && !(formData as any).purposeOther) {
+      return false;
+    }
+
+    return true;
+  };
+  const validateStep2 = () => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.firstName) errors.firstName = "First name is required";
+    if (!formData.lastName) errors.lastName = "Last name is required";
+    if (!formData.passportNumber)
+      errors.passportNumber = "Passport number is required";
+    if (!formData.passportExpiry)
+      errors.passportExpiry = "Passport expiry is required";
+    if (!formData.dateOfBirth) errors.dateOfBirth = "Date of birth is required";
+    if (!formData.gender) errors.gender = "Please select gender";
+
+    const dob = new Date(formData.dateOfBirth);
+    const expiry = new Date(formData.passportExpiry);
+    const todayDate = new Date(today);
+
+    if (formData.dateOfBirth && dob > todayDate) {
+      errors.dateOfBirth = "Date of birth cannot be in future";
+    }
+
+    if (formData.passportExpiry && expiry <= todayDate) {
+      errors.passportExpiry = "Passport is expired";
+    }
+
+    setFieldErrors(errors);
+
+    return Object.keys(errors).length === 0;
+  };
   const saveStep = async () => {
     setSaving(true);
     setError(null);
+
     try {
-      await new Promise<void>((resolve, reject) => {
-        updateMutation.mutate(
-          { id: appId, data: formData },
-          {
-            onSuccess: () => {
-              queryClient.invalidateQueries({ queryKey: getGetApplicationQueryKey(appId) });
-              resolve();
-            },
-            onError: (err: any) => reject(err),
-          }
-        );
+      await updateMutation.mutateAsync({
+        id: appId,
+        data: formData,
       });
+
+      await queryClient.invalidateQueries({
+        queryKey: getGetApplicationQueryKey(appId),
+      });
+
+      return true;
     } catch {
       setError("Failed to save. Please try again.");
-      setSaving(false);
       return false;
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    return true;
   };
-
   const handleNext = async () => {
-    if (step < 4) {
-      const ok = await saveStep();
-      if (ok) setStep((s) => s + 1);
-    } else if (step === 4) {
-      setStep(5);
+    if (step === 1 && !isStep1Valid()) {
+      setError("Please complete Travel Details correctly before continuing.");
+      return;
     }
+
+    if (step === 2 && !validateStep2()) {
+      setError(
+        "Please complete Personal Information correctly before continuing.",
+      );
+      return;
+    }
+
+    const ok = await saveStep();
+    if (!ok) return;
+
+    setStep((s) => (s < 5 ? s + 1 : 5));
   };
 
   const handleSubmit = async () => {
+    if (!isStep1Valid() || !validateStep2()) {
+      setError("Please complete all required fields before submitting.");
+      return;
+    }
+
+    if (!documents || documents.length === 0) {
+      setError("Please upload required documents before submitting.");
+      return;
+    }
+
     setSaving(true);
     setError(null);
+
     submitMutation.mutate(
       { id: appId },
       {
-        onSuccess: (updatedApp) => {
-          queryClient.invalidateQueries({ queryKey: getListApplicationsQueryKey() });
-          queryClient.invalidateQueries({ queryKey: getGetDashboardSummaryQueryKey() });
+        onSuccess: () => {
+          queryClient.invalidateQueries({
+            queryKey: getListApplicationsQueryKey(),
+          });
+          queryClient.invalidateQueries({
+            queryKey: getGetDashboardSummaryQueryKey(),
+          });
           setLocation(`/applications/${appId}`);
         },
         onError: (err: any) => {
           setError(err?.data?.error || "Failed to submit application");
           setSaving(false);
         },
-      }
+      },
     );
   };
-
   const handleFileUpload = async (docType: string, file: File) => {
     setUploadingType(docType);
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = reader.result as string;
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      if (!dataUrl) throw new Error("Failed to read file");
       uploadMutation.mutate(
         {
           id: appId,
@@ -197,11 +301,13 @@ export default function ApplicationForm() {
         },
         {
           onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: getListApplicationDocumentsQueryKey(appId) });
+            queryClient.invalidateQueries({
+              queryKey: getListApplicationDocumentsQueryKey(appId),
+            });
             setUploadingType(null);
           },
           onError: () => setUploadingType(null),
-        }
+        },
       );
     };
     reader.readAsDataURL(file);
@@ -212,18 +318,45 @@ export default function ApplicationForm() {
       { id: appId, docId },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListApplicationDocumentsQueryKey(appId) });
+          queryClient.invalidateQueries({
+            queryKey: getListApplicationDocumentsQueryKey(appId),
+          });
         },
-      }
+      },
     );
   };
 
   const docTypes = [
-    { type: "passport_copy", label: "Passport Copy", required: true, desc: "Front page with photo" },
-    { type: "photo", label: "Passport Photo", required: true, desc: "Recent passport-size photo" },
-    { type: "bank_statement", label: "Bank Statement", required: false, desc: "Last 3 months" },
-    { type: "hotel_booking", label: "Hotel Booking", required: false, desc: "Confirmed accommodation" },
-    { type: "return_ticket", label: "Return Ticket", required: false, desc: "Confirmed flight booking" },
+    {
+      type: "passport_copy",
+      label: "Passport Copy",
+      required: true,
+      desc: "Front page with photo",
+    },
+    {
+      type: "photo",
+      label: "Passport Photo",
+      required: true,
+      desc: "Recent passport-size photo",
+    },
+    {
+      type: "bank_statement",
+      label: "Bank Statement",
+      required: false,
+      desc: "Last 3 months",
+    },
+    {
+      type: "hotel_booking",
+      label: "Hotel Booking",
+      required: false,
+      desc: "Confirmed accommodation",
+    },
+    {
+      type: "return_ticket",
+      label: "Return Ticket",
+      required: false,
+      desc: "Confirmed flight booking",
+    },
   ];
 
   if (isLoading) {
@@ -250,8 +383,12 @@ export default function ApplicationForm() {
       <div className="flex items-center gap-3 mb-6">
         <span className="text-3xl">{app.countryFlag}</span>
         <div>
-          <h1 className="text-xl font-bold text-foreground">{app.countryName} — e-Visa</h1>
-          <p className="text-sm text-muted-foreground">{app.visaType.replace(/_/g, " ")}</p>
+          <h1 className="text-xl font-bold text-foreground">
+            {app.countryName} — e-Visa
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            {(app.visaType ?? "").replace(/_/g, " ")}
+          </p>
         </div>
       </div>
 
@@ -266,8 +403,8 @@ export default function ApplicationForm() {
                   step > s.id
                     ? "bg-primary border-primary text-primary-foreground"
                     : step === s.id
-                    ? "border-primary text-primary bg-primary/10"
-                    : "border-border text-muted-foreground bg-background"
+                      ? "border-primary text-primary bg-primary/10"
+                      : "border-border text-muted-foreground bg-background",
                 )}
               >
                 {step > s.id ? <Check className="w-4 h-4" /> : s.id}
@@ -275,17 +412,21 @@ export default function ApplicationForm() {
               <span
                 className={cn(
                   "text-xs mt-1 hidden sm:block text-center",
-                  step === s.id ? "text-primary font-medium" : "text-muted-foreground"
+                  step === s.id
+                    ? "text-primary font-medium"
+                    : "text-muted-foreground",
                 )}
               >
                 {s.label}
               </span>
             </div>
             {idx < STEPS.length - 1 && (
-              <div className={cn(
-                "h-0.5 flex-1 -mt-4 sm:-mt-5",
-                step > s.id ? "bg-primary" : "bg-border"
-              )} />
+              <div
+                className={cn(
+                  "h-0.5 flex-1 -mt-4 sm:-mt-5",
+                  step > s.id ? "bg-primary" : "bg-border",
+                )}
+              />
             )}
           </div>
         ))}
@@ -315,29 +456,39 @@ export default function ApplicationForm() {
         >
           {step === 1 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-foreground text-lg">Travel Details</h2>
+              <h2 className="font-semibold text-foreground text-lg">
+                Travel Details
+              </h2>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Travel Date</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Travel Date
+                  </label>
                   <input
                     type="date"
-                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    min={today}
+                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm"
                     value={formData.travelDate}
                     onChange={(e) => handleUpdate("travelDate", e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Return Date</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Return Date
+                  </label>
                   <input
                     type="date"
-                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    min={formData.travelDate || today}
+                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm"
                     value={formData.returnDate}
                     onChange={(e) => handleUpdate("returnDate", e.target.value)}
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Purpose of Visit</label>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Purpose of Visit
+                </label>
                 <select
                   className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                   value={formData.purpose}
@@ -350,7 +501,22 @@ export default function ApplicationForm() {
                   <option value="transit">Transit</option>
                   <option value="family">Family Visit</option>
                   <option value="education">Education</option>
+                  <option value="other">Other</option>
                 </select>
+
+                {formData.purpose === "other" && (
+                  <input
+                    className="w-full mt-2 px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm"
+                    placeholder="Please specify purpose"
+                    value={(formData as any).purposeOther || ""}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        purposeOther: e.target.value,
+                      }))
+                    }
+                  />
+                )}
               </div>
             </div>
           )}
@@ -358,7 +524,9 @@ export default function ApplicationForm() {
           {step === 2 && (
             <div className="space-y-5">
               <div className="flex items-start justify-between gap-4">
-                <h2 className="font-semibold text-foreground text-lg">Personal Information</h2>
+                <h2 className="font-semibold text-foreground text-lg">
+                  Personal Information
+                </h2>
                 <button
                   type="button"
                   disabled={ocrLoading}
@@ -375,9 +543,14 @@ export default function ApplicationForm() {
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-medium rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-60 flex-shrink-0"
                 >
                   {ocrLoading ? (
-                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Scanning...</>
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />{" "}
+                      Scanning...
+                    </>
                   ) : (
-                    <><ScanLine className="w-3.5 h-3.5" /> Scan Passport</>
+                    <>
+                      <ScanLine className="w-3.5 h-3.5" /> Scan Passport
+                    </>
                   )}
                 </button>
               </div>
@@ -389,7 +562,8 @@ export default function ApplicationForm() {
                   className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-400/30 rounded-lg text-sm text-emerald-300"
                 >
                   <Sparkles className="w-4 h-4 flex-shrink-0" />
-                  Passport scanned successfully! Please verify the details below.
+                  Passport scanned successfully! Please verify the details
+                  below.
                 </motion.div>
               )}
 
@@ -406,16 +580,32 @@ export default function ApplicationForm() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">First Name (as on passport)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    First Name (as on passport)
+                  </label>
+
                   <input
-                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    className={cn(
+                      "w-full px-3.5 py-2.5 bg-background border rounded-lg text-sm transition-all",
+                      fieldErrors.firstName
+                        ? "border-red-500 focus:ring-red-500"
+                        : "border-input focus:ring-primary/30 focus:border-primary",
+                    )}
                     placeholder="RAHUL"
                     value={formData.firstName}
                     onChange={(e) => handleUpdate("firstName", e.target.value)}
                   />
+
+                  {fieldErrors.firstName && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.firstName}
+                    </p>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Last Name (as on passport)</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Last Name (as on passport)
+                  </label>
                   <input
                     className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                     placeholder="SHARMA"
@@ -426,36 +616,53 @@ export default function ApplicationForm() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Passport Number</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Passport Number
+                  </label>
                   <input
                     className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all uppercase"
                     placeholder="A1234567"
                     value={formData.passportNumber}
-                    onChange={(e) => handleUpdate("passportNumber", e.target.value.toUpperCase())}
+                    onChange={(e) =>
+                      handleUpdate(
+                        "passportNumber",
+                        e.target.value.toUpperCase(),
+                      )
+                    }
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Passport Expiry</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Passport Expiry
+                  </label>
                   <input
                     type="date"
                     className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                     value={formData.passportExpiry}
-                    onChange={(e) => handleUpdate("passportExpiry", e.target.value)}
+                    onChange={(e) =>
+                      handleUpdate("passportExpiry", e.target.value)
+                    }
                   />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Date of Birth</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Date of Birth
+                  </label>
                   <input
                     type="date"
                     className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                     value={formData.dateOfBirth}
-                    onChange={(e) => handleUpdate("dateOfBirth", e.target.value)}
+                    onChange={(e) =>
+                      handleUpdate("dateOfBirth", e.target.value)
+                    }
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Gender</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Gender
+                  </label>
                   <select
                     className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                     value={formData.gender}
@@ -468,7 +675,9 @@ export default function ApplicationForm() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-foreground mb-1.5">Occupation</label>
+                  <label className="block text-sm font-medium text-foreground mb-1.5">
+                    Occupation
+                  </label>
                   <input
                     className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                     placeholder="Software Engineer"
@@ -482,10 +691,17 @@ export default function ApplicationForm() {
 
           {step === 3 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-foreground text-lg">Accommodation Details</h2>
-              <p className="text-sm text-muted-foreground">Provide your confirmed accommodation details for the destination country.</p>
+              <h2 className="font-semibold text-foreground text-lg">
+                Accommodation Details
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Provide your confirmed accommodation details for the destination
+                country.
+              </p>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Hotel / Accommodation Name</label>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Hotel / Accommodation Name
+                </label>
                 <input
                   className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                   placeholder="Grand Hotel Dubai"
@@ -494,7 +710,9 @@ export default function ApplicationForm() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">Full Address</label>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Full Address
+                </label>
                 <textarea
                   className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none"
                   rows={3}
@@ -508,13 +726,18 @@ export default function ApplicationForm() {
 
           {step === 4 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-foreground text-lg">Upload Documents</h2>
+              <h2 className="font-semibold text-foreground text-lg">
+                Upload Documents
+              </h2>
               <p className="text-sm text-muted-foreground">
-                Upload clear scans or photos. Accepted: PDF, JPG, PNG (max 10MB each).
+                Upload clear scans or photos. Accepted: PDF, JPG, PNG (max 10MB
+                each).
               </p>
               <div className="space-y-3">
                 {docTypes.map((docType) => {
-                  const uploaded = documents?.find((d) => d.type === docType.type);
+                  const uploaded = documents?.find(
+                    (d) => d.type === docType.type,
+                  );
                   return (
                     <div
                       key={docType.type}
@@ -525,14 +748,22 @@ export default function ApplicationForm() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-foreground">{docType.label}</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {docType.label}
+                          </p>
                           {docType.required && (
-                            <span className="text-xs text-destructive">Required</span>
+                            <span className="text-xs text-destructive">
+                              Required
+                            </span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">{docType.desc}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {docType.desc}
+                        </p>
                         {uploaded && (
-                          <p className="text-xs text-primary mt-1">{uploaded.originalName}</p>
+                          <p className="text-xs text-primary mt-1">
+                            {uploaded.originalName}
+                          </p>
                         )}
                       </div>
                       {uploaded ? (
@@ -551,7 +782,8 @@ export default function ApplicationForm() {
                             input.type = "file";
                             input.accept = ".pdf,.jpg,.jpeg,.png";
                             input.onchange = (e) => {
-                              const file = (e.target as HTMLInputElement).files?.[0];
+                              const file = (e.target as HTMLInputElement)
+                                .files?.[0];
                               if (file) handleFileUpload(docType.type, file);
                             };
                             input.click();
@@ -575,28 +807,54 @@ export default function ApplicationForm() {
 
           {step === 5 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-foreground text-lg">Review & Submit</h2>
+              <h2 className="font-semibold text-foreground text-lg">
+                Review & Submit
+              </h2>
               <div className="space-y-4">
                 <div className="p-4 bg-muted/30 rounded-xl">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Application Summary</p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Application Summary
+                  </p>
                   <div className="flex items-center gap-3 mb-4">
                     <span className="text-3xl">{app.countryFlag}</span>
                     <div>
-                      <p className="font-semibold text-foreground">{app.countryName}</p>
-                      <p className="text-sm text-muted-foreground">{app.visaType.replace(/_/g, " ")}</p>
+                      <p className="font-semibold text-foreground">
+                        {app.countryName}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {app.visaType.replace(/_/g, " ")}
+                      </p>
                     </div>
                     <div className="ml-auto text-right">
-                      <p className="text-lg font-bold text-primary">{formatCurrency(app.fee)}</p>
+                      <p className="text-lg font-bold text-primary">
+                        {formatCurrency(app.fee)}
+                      </p>
                       <p className="text-xs text-muted-foreground">Visa fee</p>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                     {[
-                      ["Travel Date", app.travelDate || formData.travelDate || "—"],
-                      ["Return Date", app.returnDate || formData.returnDate || "—"],
+                      [
+                        "Travel Date",
+                        app.travelDate || formData.travelDate || "—",
+                      ],
+                      [
+                        "Return Date",
+                        app.returnDate || formData.returnDate || "—",
+                      ],
                       ["Purpose", app.purpose || formData.purpose || "—"],
-                      ["Passport", app.passportNumber || formData.passportNumber || "—"],
-                      ["Name", app.firstName ? `${app.firstName} ${app.lastName}` : formData.firstName ? `${formData.firstName} ${formData.lastName}` : "—"],
+                      [
+                        "Passport",
+                        app.passportNumber || formData.passportNumber || "—",
+                      ],
+                      [
+                        "Name",
+                        app.firstName
+                          ? `${app.firstName} ${app.lastName}`
+                          : formData.firstName
+                            ? `${formData.firstName} ${formData.lastName}`
+                            : "—",
+                      ],
                       ["Documents", `${documents?.length ?? 0} uploaded`],
                     ].map(([label, value]) => (
                       <div key={label}>
@@ -608,7 +866,9 @@ export default function ApplicationForm() {
                 </div>
 
                 <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl">
-                  <p className="text-sm text-foreground font-medium mb-1">Before you submit</p>
+                  <p className="text-sm text-foreground font-medium mb-1">
+                    Before you submit
+                  </p>
                   <ul className="text-xs text-muted-foreground space-y-1">
                     <li>• Verify all details match your passport exactly</li>
                     <li>• Ensure all required documents are uploaded</li>
@@ -636,7 +896,11 @@ export default function ApplicationForm() {
         {step < 5 ? (
           <button
             onClick={handleNext}
-            disabled={saving}
+            disabled={
+              saving ||
+              (step === 1 && !isStep1Valid()) ||
+              (step === 2 && !validateStep2())
+            }
             className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-60"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

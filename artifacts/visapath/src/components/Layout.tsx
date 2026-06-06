@@ -18,28 +18,17 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+/* ✅ FIXED + SLIGHTLY ANIMATED BRAND (ONLY CHANGE) */
 function Brand({ size = "md" }: { size?: "sm" | "md" }) {
-  const mark = size === "sm" ? "w-7 h-7 text-xs" : "w-9 h-9 text-sm";
-  const word = size === "sm" ? "text-base" : "text-xl";
   return (
-    <div className="flex items-center gap-2.5">
-      <div
-        className={cn(
-          "rounded-xl bg-gold-gradient flex items-center justify-center font-serif font-bold text-[hsl(217_60%_10%)] shadow-md",
-          mark
-        )}
-      >
-        VP
-      </div>
-      <span
-        className={cn(
-          "font-serif font-semibold tracking-[0.18em] text-foreground",
-          word
-        )}
-      >
-        VISA<span className="text-gold-gradient">PATH</span>
-      </span>
-    </div>
+    <img
+      src="/logo/EzeVisa%20Logo.png"
+      alt="EzeVisas"
+      className={cn(
+        size === "sm" ? "h-12 w-auto" : "h-16 w-auto",
+        "transition-all duration-300 ease-out hover:scale-105 hover:-translate-y-0.5 hover:drop-shadow-md",
+      )}
+    />
   );
 }
 
@@ -60,11 +49,11 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-50 glass-panel border-b border-[hsl(43_40%_50%/0.18)]">
+      <header className="sticky top-0 z-50 glass-panel border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           {/* Logo */}
           <Link href={isAuthenticated ? "/dashboard" : "/"}>
-            <div className="cursor-pointer">
+            <div className="cursor-pointer flex items-center -ml-8">
               <Brand />
             </div>
           </Link>
@@ -75,6 +64,7 @@ export default function Layout({ children }: LayoutProps) {
               const Icon = link.icon;
               const isActive =
                 location === link.href || location.startsWith(link.href + "/");
+
               return (
                 <Link key={link.href} href={link.href}>
                   <div
@@ -82,7 +72,7 @@ export default function Layout({ children }: LayoutProps) {
                       "flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer",
                       isActive
                         ? "bg-primary/15 text-primary ring-1 ring-primary/25"
-                        : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
                     )}
                   >
                     <Icon className="w-4 h-4" />
@@ -99,16 +89,19 @@ export default function Layout({ children }: LayoutProps) {
               <div className="relative">
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-border hover:bg-white/5 transition-colors text-sm"
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border border-border hover:bg-accent transition-colors text-sm"
                 >
-                  <div className="w-7 h-7 rounded-full bg-primary/15 ring-1 ring-primary/30 flex items-center justify-center">
-                    <User className="w-3.5 h-3.5 text-primary" />
+                  <div className="w-7 h-7 rounded-full bg-primary ring-1 ring-primary/25 flex items-center justify-center">
+                    <User className="w-3.5 h-3.5 text-primary-foreground" />
                   </div>
+
                   <span className="hidden sm:block font-medium text-foreground">
                     {user?.firstName}
                   </span>
+
                   <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                 </button>
+
                 <AnimatePresence>
                   {userMenuOpen && (
                     <motion.div
@@ -116,7 +109,7 @@ export default function Layout({ children }: LayoutProps) {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -8 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute right-0 mt-2 w-60 bg-card border border-card-border rounded-xl shadow-xl overflow-hidden"
+                      className="absolute right-0 mt-2 w-60 bg-card border border-card-border rounded-xl shadow-md overflow-hidden"
                     >
                       <div className="px-4 py-3 border-b border-border">
                         <p className="text-sm font-medium text-foreground">
@@ -126,6 +119,7 @@ export default function Layout({ children }: LayoutProps) {
                           {user?.email}
                         </p>
                       </div>
+
                       <button
                         onClick={() => {
                           logout();
@@ -148,6 +142,7 @@ export default function Layout({ children }: LayoutProps) {
                     Sign in
                   </div>
                 </Link>
+
                 <Link href="/register">
                   <div className="px-4 py-2 bg-gold-gradient text-[hsl(217_60%_10%)] rounded-lg text-sm font-semibold hover:brightness-110 transition-all cursor-pointer shadow-md">
                     Get Started
@@ -156,10 +151,10 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             )}
 
-            {/* Mobile menu toggle */}
+            {/* Mobile menu */}
             {isAuthenticated && (
               <button
-                className="md:hidden p-2 rounded-lg hover:bg-white/5 transition-colors"
+                className="md:hidden p-2 rounded-lg hover:bg-accent/50 transition-colors"
                 onClick={() => setMobileOpen(!mobileOpen)}
               >
                 {mobileOpen ? (
@@ -185,6 +180,7 @@ export default function Layout({ children }: LayoutProps) {
                 {navLinks.map((link) => {
                   const Icon = link.icon;
                   const isActive = location === link.href;
+
                   return (
                     <Link key={link.href} href={link.href}>
                       <div
@@ -193,7 +189,7 @@ export default function Layout({ children }: LayoutProps) {
                           "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium cursor-pointer",
                           isActive
                             ? "bg-primary/15 text-primary"
-                            : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                            : "text-muted-foreground hover:text-foreground hover:bg-accent/50",
                         )}
                       >
                         <Icon className="w-4 h-4" />
@@ -212,22 +208,24 @@ export default function Layout({ children }: LayoutProps) {
       <main className="flex-1">{children}</main>
 
       {/* Footer */}
-      <footer className="border-t border-[hsl(43_40%_50%/0.15)] mt-auto bg-[hsl(217_58%_9%/0.6)] backdrop-blur">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
+      <footer className="border-t border-border mt-auto bg-card/80 backdrop-blur">
+        <div className="max-w-7xl mx-auto pl-2 sm:pr-6 px-6">
           <div className="flex flex-col md:flex-row items-center justify-between gap-5">
             <Brand size="sm" />
+
             <p className="text-xs text-muted-foreground text-center max-w-sm">
-              Smart e-Visa portal for Indian travelers. Not affiliated with any
-              government body.
+              Trusted e-Visa portal for Indian travelers. Not affiliated with
+              any government body.
             </p>
+
             <div className="flex items-center gap-5 text-xs text-muted-foreground">
-              <span className="hover:text-gold transition-colors cursor-pointer">
+              <span className="hover:text-primary transition-colors cursor-pointer">
                 Privacy Policy
               </span>
-              <span className="hover:text-gold transition-colors cursor-pointer">
+              <span className="hover:text-primary transition-colors cursor-pointer">
                 Terms of Service
               </span>
-              <span className="hover:text-gold transition-colors cursor-pointer">
+              <span className="hover:text-primary transition-colors cursor-pointer">
                 Support
               </span>
             </div>

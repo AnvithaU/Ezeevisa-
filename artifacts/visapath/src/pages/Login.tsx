@@ -3,7 +3,16 @@ import { useLocation } from "wouter";
 import { GoogleLogin } from "@react-oauth/google";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowRight,
+  Loader2,
+  AlertCircle,
+  CheckCircle2,
+} from "lucide-react";
 import { customFetch } from "@/lib/customFetch";
 import { setOtpSession } from "@/lib/otpSession";
 import AuthShell, { AuthTabs } from "@/components/auth/AuthShell";
@@ -30,7 +39,8 @@ export default function Login() {
   const validate = (): boolean => {
     const errs: Partial<LoginForm> = {};
     if (!form.email.trim()) errs.email = "Email is required";
-    else if (!emailRe.test(form.email.trim())) errs.email = "Enter a valid email address";
+    else if (!emailRe.test(form.email.trim()))
+      errs.email = "Enter a valid email address";
     if (!form.password) errs.password = "Password is required";
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -47,7 +57,14 @@ export default function Login() {
         onSuccess: (res) => {
           if ("token" in res) {
             login(res.token, res.user);
-            setLocation("/dashboard");
+            const redirect = localStorage.getItem("redirectAfterLogin");
+
+            if (redirect) {
+              localStorage.removeItem("redirectAfterLogin");
+              setLocation(redirect);
+            } else {
+              setLocation("/apply");
+            }
             return;
           }
           setOtpSession({
@@ -60,11 +77,13 @@ export default function Login() {
         onError: (err: any) => {
           setError(err?.data?.error || "Invalid email or password");
         },
-      }
+      },
     );
   };
 
-  const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
+  const handleGoogleSuccess = async (credentialResponse: {
+    credential?: string;
+  }) => {
     if (!credentialResponse.credential) {
       setError("Google sign-in failed. Please try again.");
       return;
@@ -72,12 +91,23 @@ export default function Login() {
     setGoogleLoading(true);
     setError(null);
     try {
-      const res = await customFetch<{ token: string; user: any }>("/api/auth/google", {
-        method: "POST",
-        body: JSON.stringify({ credential: credentialResponse.credential }),
-      });
+      const res = await customFetch<{ token: string; user: any }>(
+        "/api/auth/google",
+        {
+          method: "POST",
+          body: JSON.stringify({ credential: credentialResponse.credential }),
+        },
+      );
       login(res.token, res.user);
-      setLocation("/dashboard");
+
+      const redirect = localStorage.getItem("redirectAfterLogin");
+
+      if (redirect) {
+        localStorage.removeItem("redirectAfterLogin");
+        setLocation(redirect);
+      } else {
+        setLocation("/dashboard");
+      }
     } catch (err: any) {
       setError(err?.data?.error || "Google sign-in failed. Please try again.");
     } finally {
@@ -88,7 +118,7 @@ export default function Login() {
   return (
     <AuthShell>
       <div className="ezv-form-title">Welcome Back</div>
-      <p className="ezv-form-subtitle">Sign in to your VisaPath account</p>
+      <p className="ezv-form-subtitle">Sign in to your EzeVisas account</p>
       <AuthTabs mode="login" />
 
       {error && (
@@ -115,13 +145,17 @@ export default function Login() {
                 autoComplete="email"
                 placeholder="you@example.com"
                 value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, email: e.target.value }))
+                }
               />
               <span className="ezv-field-icon">
                 <Mail size={17} strokeWidth={2} />
               </span>
             </div>
-            {fieldErrors.email && <div className="ezv-field-err">{fieldErrors.email}</div>}
+            {fieldErrors.email && (
+              <div className="ezv-field-err">{fieldErrors.email}</div>
+            )}
           </div>
 
           <div className="ezv-field-wrap">
@@ -133,7 +167,9 @@ export default function Login() {
                 autoComplete="current-password"
                 placeholder="Enter your password"
                 value={form.password}
-                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, password: e.target.value }))
+                }
               />
               <span className="ezv-field-icon">
                 <Lock size={17} strokeWidth={2} />
@@ -147,7 +183,9 @@ export default function Login() {
                 {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
               </button>
             </div>
-            {fieldErrors.password && <div className="ezv-field-err">{fieldErrors.password}</div>}
+            {fieldErrors.password && (
+              <div className="ezv-field-err">{fieldErrors.password}</div>
+            )}
           </div>
         </div>
 
@@ -155,13 +193,19 @@ export default function Login() {
           type="button"
           className="ezv-forgot-link"
           onClick={() =>
-            setInfo("To reset your password, please contact support@visapath.com.")
+            setInfo(
+              "To reset your password, please contact support@ezevisas.com.",
+            )
           }
         >
           Forgot password?
         </button>
 
-        <button type="submit" className="ezv-cta-btn" disabled={loginMutation.isPending}>
+        <button
+          type="submit"
+          className="ezv-cta-btn"
+          disabled={loginMutation.isPending}
+        >
           <span className="ezv-btn-inner">
             {loginMutation.isPending ? (
               <>
@@ -184,14 +228,19 @@ export default function Login() {
 
       <div className="ezv-social-row">
         {googleLoading ? (
-          <div className="ezv-alert ezv-alert--ok" style={{ margin: 0, width: "100%", justifyContent: "center" }}>
+          <div
+            className="ezv-alert ezv-alert--ok"
+            style={{ margin: 0, width: "100%", justifyContent: "center" }}
+          >
             <Loader2 size={15} className="ezv-spin" /> Signing in with Google...
           </div>
         ) : (
           <div>
             <GoogleLogin
               onSuccess={handleGoogleSuccess}
-              onError={() => setError("Google sign-in failed. Please try again.")}
+              onError={() =>
+                setError("Google sign-in failed. Please try again.")
+              }
               text="continue_with"
               shape="pill"
               theme="filled_black"
@@ -202,7 +251,7 @@ export default function Login() {
       </div>
 
       <p className="ezv-bottom-link">
-        New to VisaPath?{" "}
+        New to EzeVisas?{" "}
         <a onClick={() => setLocation("/register")}>Create a free account</a>
       </p>
     </AuthShell>

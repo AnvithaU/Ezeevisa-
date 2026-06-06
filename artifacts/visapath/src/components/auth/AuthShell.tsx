@@ -11,7 +11,7 @@ function Particles() {
         animationDuration: `${4 + Math.random() * 5}s`,
         animationDelay: `${Math.random() * 6}s`,
       })),
-    []
+    [],
   );
   return (
     <>
@@ -33,10 +33,14 @@ export default function AuthShell({ children }: { children: ReactNode }) {
       <div className="ezv-v-divider" />
 
       <div className="ezv-left-panel">
-        <div className="ezv-logo-mark">
-          <div className="ezv-logo-icon">VP</div>
-          <div className="ezv-logo-text">
-            VISA<span>PATH</span>
+        <div className="ezv-logo-mark ezv-brand">
+          <img
+            src="/logo/EzeVisa Logo.png"
+            alt="EzeVisa"
+            className="ezv-logo-img"
+          />
+          <div className="ezv-logo-text ezv-brand-text">
+            Eze<span>Visa</span>
           </div>
         </div>
         <div className="ezv-hero-tag">&#10022; Global Visa Solutions</div>

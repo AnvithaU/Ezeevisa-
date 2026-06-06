@@ -1,8 +1,20 @@
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { useGetVisaCountries } from "@workspace/api-client-react";
-import { Globe, Clock, Shield, CheckCircle, ArrowRight, Zap, FileCheck, Plane } from "lucide-react";
+import { useLocation } from "wouter";
+import WorldMap from "@/components/WorldMap/WorldMap";
+import {
+  Globe,
+  Clock,
+  Shield,
+  CheckCircle,
+  ArrowRight,
+  Zap,
+  FileCheck,
+  Plane,
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { isAuthenticated } from "@/lib/auth"; // adjust path if needed
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -18,80 +30,120 @@ const stagger = {
 };
 
 export default function Landing() {
+  const [, setLocation] = useLocation();
+
+  const handleApplyClick = (href: string) => {
+    if (!isAuthenticated()) {
+      localStorage.setItem("redirectAfterLogin", href);
+      setLocation("/apply");
+      return;
+    }
+
+    setLocation(href);
+  };
+
   const { data: countries } = useGetVisaCountries();
   const featured = countries?.filter((c) => c.isFeatured) ?? [];
 
   return (
     <div>
       {/* Hero */}
+      {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-accent/20 border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-20 md:py-28 lg:py-32">
-          <motion.div
-            className="max-w-2xl"
-            initial="hidden"
-            animate="visible"
-            variants={stagger}
-          >
-            <motion.div variants={fadeUp} className="flex items-center gap-2 mb-6">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full text-xs text-primary font-medium">
-                <Zap className="w-3.5 h-3.5" />
-                Fast e-Visa processing for Indian passport holders
-              </div>
-            </motion.div>
-
-            <motion.h1
-              variants={fadeUp}
-              className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight tracking-tight"
+          <div className="grid lg:grid-cols-[1fr_1.4fr] gap-8 items-center">
+            {/* Left Side */}
+            <motion.div
+              className="max-w-2xl"
+              initial="hidden"
+              animate="visible"
+              variants={stagger}
             >
-              Your visa.{" "}
-              <span className="text-primary">Done right.</span>
-              <br />
-              Done fast.
-            </motion.h1>
+              <motion.div
+                variants={fadeUp}
+                className="flex items-center gap-2 mb-6"
+              >
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-full text-xs text-primary font-medium">
+                  <Zap className="w-3.5 h-3.5" />
+                  Fast e-Visa processing for Indian passport holders
+                </div>
+              </motion.div>
 
-            <motion.p
-              variants={fadeUp}
-              className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-xl"
-            >
-              Apply for e-visas to Dubai, Vietnam, Singapore, Malaysia, Thailand, and 8 more countries — all from one trusted platform. Upload documents, track your application, and receive your approved visa digitally.
-            </motion.p>
+              <motion.h1
+                variants={fadeUp}
+                className="text-4xl md:text-5xl lg:text-6xl font-bold text-foreground leading-tight tracking-tight"
+              >
+                Your visa. <span className="text-primary">Done right.</span>
+                <br />
+                Done fast.
+              </motion.h1>
 
-            <motion.div variants={fadeUp} className="mt-8 flex items-center gap-4">
-              <Link href="/apply">
-                <div className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-all hover:shadow-md cursor-pointer group">
+              <motion.p
+                variants={fadeUp}
+                className="mt-6 text-lg text-muted-foreground leading-relaxed max-w-xl"
+              >
+                Apply for e-visas to Dubai, Vietnam, Singapore, Malaysia,
+                Thailand, and 8 more countries — all from one trusted platform.
+                Upload documents, track your application, and receive your
+                approved visa digitally.
+              </motion.p>
+
+              <motion.div
+                variants={fadeUp}
+                className="mt-8 flex items-center gap-4"
+              >
+                <div
+                  onClick={() => handleApplyClick("/apply")}
+                  className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:bg-primary/90 transition-all hover:shadow-md cursor-pointer group"
+                >
                   Start Your Application
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                 </div>
-              </Link>
-              <Link href="/track">
-                <div className="px-6 py-3 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors cursor-pointer text-sm">
-                  Track Existing Visa
+
+                <Link href="/track">
+                  <div className="px-6 py-3 border border-border text-foreground rounded-lg font-medium hover:bg-muted transition-colors cursor-pointer text-sm">
+                    Track Existing Visa
+                  </div>
+                </Link>
+              </motion.div>
+
+              <motion.div
+                variants={fadeUp}
+                className="mt-10 flex items-center gap-6 text-sm text-muted-foreground"
+              >
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-primary" />
+                  <span>No hidden fees</span>
                 </div>
-              </Link>
+
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-primary" />
+                  <span>24-hour support</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-primary" />
+                  <span>96% approval rate</span>
+                </div>
+              </motion.div>
             </motion.div>
 
-            <motion.div variants={fadeUp} className="mt-10 flex items-center gap-6 text-sm text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-primary" />
-                <span>No hidden fees</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-primary" />
-                <span>24-hour support</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4 text-primary" />
-                <span>96% approval rate</span>
-              </div>
+            {/* Right Side Map */}
+            <motion.div
+              initial={{ opacity: 0, x: 40 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8 }}
+              className="flex justify-center items-start w-full"
+            >
+              <WorldMap />
             </motion.div>
-          </motion.div>
+          </div>
         </div>
 
         {/* Decorative background element */}
         <div className="absolute -right-24 top-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute right-32 bottom-0 w-64 h-64 bg-accent/30 rounded-full blur-2xl pointer-events-none" />
       </section>
-
       {/* Stats */}
       <section className="bg-primary py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -109,8 +161,12 @@ export default function Landing() {
               { value: "50K+", label: "Visas Issued" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <p className="text-3xl font-bold text-primary-foreground">{stat.value}</p>
-                <p className="mt-1 text-sm text-primary-foreground/70">{stat.label}</p>
+                <p className="text-3xl font-bold text-primary-foreground">
+                  {stat.value}
+                </p>
+                <p className="mt-1 text-sm text-primary-foreground/70">
+                  {stat.label}
+                </p>
               </div>
             ))}
           </motion.div>
@@ -127,14 +183,24 @@ export default function Landing() {
             variants={stagger}
             className="mb-12"
           >
-            <motion.p variants={fadeUp} className="text-sm font-medium text-primary uppercase tracking-wider mb-2">
+            <motion.p
+              variants={fadeUp}
+              className="text-sm font-medium text-primary uppercase tracking-wider mb-2"
+            >
               Top Destinations
             </motion.p>
-            <motion.h2 variants={fadeUp} className="text-3xl font-bold text-foreground">
+            <motion.h2
+              variants={fadeUp}
+              className="text-3xl font-bold text-foreground"
+            >
               Popular e-Visa destinations
             </motion.h2>
-            <motion.p variants={fadeUp} className="mt-3 text-muted-foreground max-w-xl">
-              Fast, affordable e-visas for Indian passport holders. Processing starts within hours.
+            <motion.p
+              variants={fadeUp}
+              className="mt-3 text-muted-foreground max-w-xl"
+            >
+              Fast, affordable e-visas for Indian passport holders. Processing
+              starts within hours.
             </motion.p>
           </motion.div>
 
@@ -147,40 +213,58 @@ export default function Landing() {
           >
             {featured.map((country) => (
               <motion.div key={country.code} variants={fadeUp}>
-                <Link href={`/apply/${country.code}`}>
-                  <div className="group bg-card border border-border rounded-xl p-5 hover:border-primary/30 hover:shadow-md transition-all cursor-pointer h-full">
-                    <div className="flex items-start justify-between mb-4">
-                      <span className="text-4xl">{country.flag}</span>
-                      <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
-                        {country.continent}
+                <div
+                  onClick={() => {
+                    const target = `/apply/${country.code}`;
+
+                    localStorage.setItem("selectedCountry", country.code);
+
+                    if (!isAuthenticated()) {
+                      localStorage.setItem("redirectAfterLogin", target);
+                      setLocation("/login");
+                    } else {
+                      setLocation(target);
+                    }
+                  }}
+                >
+                  <div className="flex items-start justify-between mb-4">
+                    <span className="text-4xl">{country.flag}</span>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
+                      {country.continent}
+                    </span>
+                  </div>
+                  <h3 className="font-semibold text-foreground text-lg">
+                    {country.name}
+                  </h3>
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">
+                        {country.processingDays} day
+                        {country.processingDays !== 1 ? "s" : ""} processing
                       </span>
                     </div>
-                    <h3 className="font-semibold text-foreground text-lg">{country.name}</h3>
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center gap-2 text-sm">
-                        <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-muted-foreground">
-                          {country.processingDays} day{country.processingDays !== 1 ? "s" : ""} processing
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Globe className="w-3.5 h-3.5 text-muted-foreground" />
-                        <span className="text-muted-foreground">Stay up to {country.maxStay}</span>
-                      </div>
-                    </div>
-                    <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-                      <div>
-                        <span className="text-xs text-muted-foreground">From </span>
-                        <span className="text-base font-bold text-primary">
-                          {formatCurrency(country.fee)}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                        Apply <ArrowRight className="w-3.5 h-3.5" />
-                      </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Globe className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground">
+                        Stay up to {country.maxStay}
+                      </span>
                     </div>
                   </div>
-                </Link>
+                  <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-muted-foreground">
+                        From{" "}
+                      </span>
+                      <span className="text-base font-bold text-primary">
+                        {formatCurrency(country.fee)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                      Apply <ArrowRight className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                </div>
               </motion.div>
             ))}
           </motion.div>
@@ -206,10 +290,16 @@ export default function Landing() {
             variants={stagger}
             className="text-center mb-12"
           >
-            <motion.p variants={fadeUp} className="text-sm font-medium text-primary uppercase tracking-wider mb-2">
+            <motion.p
+              variants={fadeUp}
+              className="text-sm font-medium text-primary uppercase tracking-wider mb-2"
+            >
               Simple Process
             </motion.p>
-            <motion.h2 variants={fadeUp} className="text-3xl font-bold text-foreground">
+            <motion.h2
+              variants={fadeUp}
+              className="text-3xl font-bold text-foreground"
+            >
               Your visa in 4 easy steps
             </motion.h2>
           </motion.div>
@@ -259,9 +349,15 @@ export default function Landing() {
                       <Icon className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <span className="text-xs font-bold text-muted-foreground">{item.step}</span>
-                      <h3 className="mt-0.5 font-semibold text-foreground">{item.title}</h3>
-                      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{item.desc}</p>
+                      <span className="text-xs font-bold text-muted-foreground">
+                        {item.step}
+                      </span>
+                      <h3 className="mt-0.5 font-semibold text-foreground">
+                        {item.title}
+                      </h3>
+                      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+                        {item.desc}
+                      </p>
                     </div>
                   </div>
                 </motion.div>
@@ -294,7 +390,8 @@ export default function Landing() {
                 <span className="text-gold-gradient">journey?</span>
               </h2>
               <p className="mt-3 text-muted-foreground max-w-md">
-                Join thousands of Indian travelers who get their e-visas quickly and hassle-free through VisaPath.
+                Join thousands of Indian travelers who trust EzeVisa for fast,
+                secure, and hassle-free e-visa processing.
               </p>
             </div>
             <div className="relative flex items-center gap-3 flex-shrink-0">

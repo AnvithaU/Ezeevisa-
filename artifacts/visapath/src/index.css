@@ -82,57 +82,57 @@
    Shared by :root and .dark so the look is identical regardless
    of whether a `dark` class is ever applied.
    ───────────────────────────────────────────────────────────── */
-:root,
-.dark {
+:root
+ {
   --button-outline: rgba(201, 168, 76, 0.18);
   --badge-outline: rgba(201, 168, 76, 0.12);
   --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255, 255, 255, 0.04);
-  --elevate-2: rgba(255, 255, 255, 0.08);
+  --elevate-1: rgba(0, 0, 0, 0.03);
+  --elevate-2: rgba(0, 0, 0, 0.06);
 
-  /* Navy base — #0a1628 */
-  --background: 217 60% 10%;
+
+  --background: 40 30% 98%;
   /* Cream — #f5f0e8 */
-  --foreground: 40 33% 94%;
+  --foreground: 215 18% 20%;
 
   /* Subtle navy borders */
-  --border: 216 35% 22%;
+  --border: 40 20% 90%;
 
   /* Card — navy-mid glass (#0e1d36) with faint gold edge */
-  --card: 216 52% 14%;
-  --card-foreground: 40 33% 94%;
-  --card-border: 43 30% 30%;
+  --card: 40 25% 99%;
+  --card-foreground: 215 18% 15%;
+  --card-border: 40 18% 86%;
 
   /* Sidebar */
-  --sidebar: 217 58% 11%;
-  --sidebar-foreground: 40 33% 94%;
-  --sidebar-border: 216 35% 22%;
+  --sidebar: 0 0% 100%;
+  --sidebar-foreground: 220 25% 15%;
+  --sidebar-border: 40 20% 90%;
   --sidebar-primary: 43 54% 54%;
   --sidebar-primary-foreground: 217 60% 10%;
-  --sidebar-accent: 216 45% 18%;
-  --sidebar-accent-foreground: 43 71% 69%;
-  --sidebar-ring: 43 54% 54%;
+  --sidebar-accent: 43 60% 95%;
+  --sidebar-accent-foreground: 43 60% 35%;
+  --sidebar-ring: 43 60% 60%;
 
   /* Popover */
-  --popover: 216 54% 13%;
-  --popover-foreground: 40 33% 94%;
-  --popover-border: 43 28% 28%;
-
+  --popover: 0 0% 100%;
+  --popover-foreground: 220 25% 15%;
+  --popover-border: 40 20% 90%;
+  
   /* Primary — gold #c9a84c */
   --primary: 43 54% 54%;
   --primary-foreground: 217 60% 10%;
 
   /* Secondary — navy-light #1a3560 */
-  --secondary: 217 45% 22%;
-  --secondary-foreground: 40 30% 90%;
+  --secondary: 40 20% 96%;
+  --secondary-foreground: 220 25% 20%;
 
   /* Muted */
-  --muted: 216 40% 18%;
-  --muted-foreground: 40 18% 66%;
+  --muted: 40 18% 96%;
+  --muted-foreground: 220 10% 40%;
 
   /* Accent — gold tint */
-  --accent: 43 40% 22%;
-  --accent-foreground: 43 71% 72%;
+  --accent: 43 60% 95%;
+  --accent-foreground: 43 60% 35%;
 
   /* Destructive — #e05a5a */
   --destructive: 0 68% 62%;
@@ -146,8 +146,8 @@
   --warning: 43 74% 52%;
   --warning-foreground: 217 60% 10%;
 
-  --input: 216 32% 24%;
-  --ring: 43 54% 54%;
+  --input: 40 18% 96%;
+  --ring: 43 60% 60%;
 
   --chart-1: 43 54% 54%;
   --chart-2: 43 71% 69%;
@@ -165,16 +165,20 @@
   --app-font-mono: Menlo, monospace;
   --radius: 0.875rem;
 
-  --shadow-2xs: 0px 1px 2px 0px rgba(0, 0, 0, 0.25);
-  --shadow-xs: 0px 1px 3px 0px rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0px 1px 3px rgba(0, 0, 0, 0.35), 0px 1px 2px -1px rgba(0, 0, 0, 0.25);
-  --shadow: 0px 2px 8px rgba(0, 0, 0, 0.4), 0px 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0px 6px 18px rgba(0, 0, 0, 0.45), 0px 2px 6px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0px 14px 36px rgba(0, 0, 0, 0.5), 0px 6px 12px rgba(0, 0, 0, 0.32);
-  --shadow-xl: 0px 24px 56px rgba(0, 0, 0, 0.55), 0px 10px 20px rgba(0, 0, 0, 0.38);
-  --shadow-2xl: 0px 40px 80px rgba(0, 0, 0, 0.6);
-  --tracking-normal: 0em;
-  --spacing: 0.25rem;
+  --shadow-2xs: 0px 1px 2px rgba(15, 23, 42, 0.03);
+  --shadow-xs: 0px 1px 3px rgba(15, 23, 42, 0.05);
+
+  --shadow-sm: 0px 2px 8px rgba(15, 23, 42, 0.06);
+
+  --shadow: 0px 4px 12px rgba(15, 23, 42, 0.08);
+
+  --shadow-md: 0px 8px 24px rgba(15, 23, 42, 0.10);
+
+  --shadow-lg: 0px 12px 32px rgba(15, 23, 42, 0.12);
+
+  --shadow-xl: 0px 20px 48px rgba(15, 23, 42, 0.14);
+
+  --shadow-2xl: 0px 32px 72px rgba(15, 23, 42, 0.16);
 
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
   --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
@@ -192,11 +196,26 @@
 
   body {
     @apply font-sans antialiased text-foreground;
+
     background-color: hsl(var(--background));
+
     background-image:
-      radial-gradient(ellipse 80% 80% at 15% 0%, hsl(216 55% 16% / 0.9) 0%, transparent 55%),
-      radial-gradient(ellipse 70% 60% at 85% 10%, hsl(217 50% 14% / 0.7) 0%, transparent 50%),
-      radial-gradient(ellipse 90% 70% at 50% 100%, hsl(215 60% 8% / 0.9) 0%, transparent 60%);
+      radial-gradient(
+        ellipse 80% 80% at 15% 0%,
+        hsl(43 54% 54% / 0.06) 0%,
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse 70% 60% at 85% 10%,
+        hsl(43 71% 69% / 0.05) 0%,
+        transparent 50%
+      ),
+      radial-gradient(
+        ellipse 90% 70% at 50% 100%,
+        hsl(43 54% 54% / 0.04) 0%,
+        transparent 60%
+      );
+
     background-attachment: fixed;
     min-height: 100vh;
   }
@@ -217,13 +236,22 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(43 40% 40% / 0.35);
+  background: hsl(43 54% 54% / 0.28);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(43 54% 54% / 0.55);
+  background: hsl(43 54% 54% / 0.5);
 }
-
+::selection {
+  background: hsl(var(--gold) / 0.25);
+  color: hsl(var(--foreground));
+}
+*:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 1px hsl(var(--ring)),
+    0 0 0 4px hsl(var(--ring) / 0.15);
+}
 @layer utilities {
   input[type="search"]::-webkit-search-cancel-button {
     @apply hidden;
@@ -237,12 +265,11 @@
 
   /* Premium glass surface */
   .glass-panel {
-    background: hsl(216 52% 14% / 0.6);
-    border: 1px solid hsl(43 40% 50% / 0.18);
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid rgba(201, 168, 76, 0.12);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
   }
-
   /* Gold gradient text + fills */
   .text-gold-gradient {
     background: linear-gradient(135deg, hsl(var(--gold-light)), hsl(var(--gold)));
@@ -255,8 +282,9 @@
     background: linear-gradient(
       135deg,
       hsl(var(--gold-dark)) 0%,
-      hsl(var(--gold)) 50%,
-      hsl(var(--gold-light)) 100%
+      hsl(var(--gold)) 35%,
+      hsl(var(--gold-light)) 65%,
+      hsl(var(--gold-dark)) 100%
     );
   }
 
@@ -318,3 +346,4 @@
     inset: -1px;
   }
 }
+
