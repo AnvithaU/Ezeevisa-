@@ -25,6 +25,9 @@ export const applicationsTable = pgTable("applications", {
   purpose: text("purpose"),
   passportNumber: text("passport_number"),
   passportExpiry: text("passport_expiry"),
+  nationality: text("nationality"),
+  passportIssueDate: text("passport_issue_date"),
+  placeOfBirth: text("place_of_birth"),
   firstName: text("first_name"),
   lastName: text("last_name"),
   dateOfBirth: text("date_of_birth"),
@@ -41,7 +44,9 @@ export const applicationsTable = pgTable("applications", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertApplicationSchema = createInsertSchema(applicationsTable).omit({
+export const insertApplicationSchema = createInsertSchema(
+  applicationsTable,
+).omit({
   id: true,
   createdAt: true,
   updatedAt: true,

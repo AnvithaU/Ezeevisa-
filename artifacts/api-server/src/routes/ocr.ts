@@ -12,7 +12,8 @@ const openai = new OpenAI({
 router.post("/ocr/passport", requireAuth, async (req: AuthRequest, res): Promise<void> => {
   const { dataUrl } = req.body;
 
-  if (!dataUrl || !dataUrl.startsWith("data:image")) {
+  if (!dataUrl || 
+      !dataUrl.startsWith("data:image")) {
     res.status(400).json({ error: "A valid image data URL is required" });
     return;
   }

@@ -48,6 +48,31 @@ export default function ApplicationForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const today = new Date().toISOString().split("T")[0];
+  const parseLocalDate = (dateString: string) => {
+    if (!dateString) return null;
+
+    const [year, month, day] = dateString.split("-").map(Number);
+
+    return new Date(year, month - 1, day);
+  };
+
+  const calculateAge = (dobString: string) => {
+    const dob = parseLocalDate(dobString);
+
+    if (!dob) return 0;
+
+    const today = new Date();
+
+    let age = today.getFullYear() - dob.getFullYear();
+
+    const monthDiff = today.getMonth() - dob.getMonth();
+
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+      age--;
+    }
+
+    return age;
+  };
 
   const { data: app, isLoading } = useGetApplication(appId, {
     query: { enabled: !!appId, queryKey: getGetApplicationQueryKey(appId) },
@@ -99,9 +124,18 @@ export default function ApplicationForm() {
 
         setFormData((prev) => ({
           ...prev,
-          firstName: extracted?.firstName || prev.firstName,
-          lastName: extracted?.lastName || prev.lastName,
-          passportNumber: extracted?.passportNumber || prev.passportNumber,
+          firstName:
+            extracted?.firstName && extracted.firstName !== "UNKNOWN"
+              ? extracted.firstName
+              : prev.firstName,
+          lastName:
+            extracted?.lastName && extracted.lastName !== "UNKNOWN"
+              ? extracted.lastName
+              : prev.lastName,
+
+          passportNumber: extracted?.passportNumber?.trim()
+            ? extracted.passportNumber
+            : prev.passportNumber,
           dateOfBirth: extracted?.dateOfBirth || prev.dateOfBirth,
           passportExpiry: extracted?.passportExpiry || prev.passportExpiry,
           gender: extracted?.gender || prev.gender,
@@ -119,14 +153,19 @@ export default function ApplicationForm() {
 
     reader.readAsDataURL(file);
   };
+
   const [formData, setFormData] = useState({
     travelDate: app?.travelDate ?? "",
     returnDate: app?.returnDate ?? "",
     purpose: app?.purpose ?? "",
     passportNumber: app?.passportNumber ?? "",
     passportExpiry: app?.passportExpiry ?? "",
+    passportIssueDate: app?.passportIssueDate ?? "",
+
     firstName: app?.firstName ?? "",
     lastName: app?.lastName ?? "",
+    nationality: app?.nationality ?? "",
+    placeOfBirth: app?.placeOfBirth ?? "",
     dateOfBirth: app?.dateOfBirth ?? "",
     gender: app?.gender ?? "",
     occupation: app?.occupation ?? "",
@@ -143,8 +182,11 @@ export default function ApplicationForm() {
       purpose: app.purpose ?? "",
       passportNumber: app.passportNumber ?? "",
       passportExpiry: app.passportExpiry ?? "",
+      passportIssueDate: app?.passportIssueDate ?? "",
       firstName: app.firstName ?? "",
       lastName: app.lastName ?? "",
+      nationality: app?.nationality ?? "",
+      placeOfBirth: app?.placeOfBirth ?? "",
       dateOfBirth: app.dateOfBirth ?? "",
       gender: app.gender ?? "",
       occupation: app.occupation ?? "",
@@ -163,17 +205,23 @@ export default function ApplicationForm() {
     }
   };
   const isStep1Valid = () => {
-    if (!formData.travelDate || !formData.returnDate || !formData.purpose)
+    if (!formData.travelDate || !formData.returnDate || !formData.purpose) {
       return false;
-    const travel = new Date(formData.travelDate);
-    const returnD = new Date(formData.returnDate);
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
+    }
 
-    if (travel < now) return false;
-    if (returnD <= travel) return false;
+    const travel = parseLocalDate(formData.travelDate);
+    const returnDate = parseLocalDate(formData.returnDate);
 
-    if (formData.purpose === "other" && !(formData as any).purposeOther) {
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
+    if (!travel || !returnDate) return false;
+
+    if (travel < todayDate) return false;
+
+    if (returnDate <= travel) return false;
+
+    if (formData.purpose === "other" && !formData.purposeOther.trim()) {
       return false;
     }
 
@@ -184,6 +232,13 @@ export default function ApplicationForm() {
 
     if (!formData.firstName) errors.firstName = "First name is required";
     if (!formData.lastName) errors.lastName = "Last name is required";
+    if (!formData.nationality) errors.nationality = "Nationality is required";
+
+    if (!formData.passportIssueDate)
+      errors.passportIssueDate = "Passport issue date is required";
+
+    if (!formData.placeOfBirth)
+      errors.placeOfBirth = "Place of birth is required";
     if (!formData.passportNumber)
       errors.passportNumber = "Passport number is required";
     if (!formData.passportExpiry)
@@ -191,19 +246,82 @@ export default function ApplicationForm() {
     if (!formData.dateOfBirth) errors.dateOfBirth = "Date of birth is required";
     if (!formData.gender) errors.gender = "Please select gender";
 
-    const dob = new Date(formData.dateOfBirth);
-    const expiry = new Date(formData.passportExpiry);
     const todayDate = new Date(today);
+    const dob = parseLocalDate(formData.dateOfBirth);
+    const expiry = parseLocalDate(formData.passportExpiry);
+    const issueDate = parseLocalDate(formData.passportIssueDate);
+    if (issueDate) {
+      if (issueDate > todayDate) {
+        errors.passportIssueDate =
+          "Passport issue date cannot be in the future";
+      }
 
-    if (formData.dateOfBirth && dob > todayDate) {
-      errors.dateOfBirth = "Date of birth cannot be in future";
+      if (expiry && issueDate >= expiry) {
+        errors.passportIssueDate = "Issue date must be before expiry date";
+      }
     }
+    const travelDate = parseLocalDate(formData.travelDate);
+    // DOB validation
+    if (formData.dateOfBirth && dob) {
+      const age = calculateAge(formData.dateOfBirth);
 
-    if (formData.passportExpiry && expiry <= todayDate) {
-      errors.passportExpiry = "Passport is expired";
+      if (dob > todayDate) {
+        errors.dateOfBirth = "Date of birth cannot be in the future";
+      } else if (age > 120) {
+        errors.dateOfBirth = "Enter a valid date of birth";
+      }
+    }
+    // Passport expiry validation
+
+    if (formData.passportExpiry && expiry) {
+      if (expiry <= todayDate) {
+        errors.passportExpiry = "Passport is expired";
+      }
+
+      if (travelDate && expiry <= travelDate) {
+        errors.passportExpiry = "Passport must remain valid after travel date";
+      }
+
+      if (travelDate) {
+        const sixMonthsAfterTravel = new Date(travelDate);
+
+        sixMonthsAfterTravel.setMonth(sixMonthsAfterTravel.getMonth() + 6);
+
+        if (expiry < sixMonthsAfterTravel) {
+          errors.passportExpiry =
+            "Passport must be valid for at least 6 months after travel date";
+        }
+      }
+    }
+    // Passport number validation
+    const passportRegex = /^[A-Z0-9]{6,15}$/;
+
+    if (
+      formData.passportNumber &&
+      !passportRegex.test(formData.passportNumber)
+    ) {
+      errors.passportNumber = "Enter a valid passport number";
     }
 
     setFieldErrors(errors);
+
+    return Object.keys(errors).length === 0;
+  };
+  const validateStep3 = () => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.hotelName.trim()) {
+      errors.hotelName = "Accommodation name is required";
+    }
+
+    if (!formData.hotelAddress.trim()) {
+      errors.hotelAddress = "Accommodation address is required";
+    }
+
+    setFieldErrors((prev) => ({
+      ...prev,
+      ...errors,
+    }));
 
     return Object.keys(errors).length === 0;
   };
@@ -230,6 +348,7 @@ export default function ApplicationForm() {
     }
   };
   const handleNext = async () => {
+    setError(null);
     if (step === 1 && !isStep1Valid()) {
       setError("Please complete Travel Details correctly before continuing.");
       return;
@@ -241,6 +360,24 @@ export default function ApplicationForm() {
       );
       return;
     }
+    if (step === 3 && !validateStep3()) {
+      setError("Please complete Accommodation Details before continuing.");
+      return;
+    }
+    if (step === 4) {
+      const requiredDocs = docTypes.map((d) => d.type);
+      console.log("STEP 4 VALIDATION RUNNING");
+      console.log(documents);
+
+      const hasRequiredDocs = requiredDocs.every((type) =>
+        documents?.some((d) => d.type === type),
+      );
+
+      if (!hasRequiredDocs) {
+        setError("Please upload all required documents before continuing.");
+        return;
+      }
+    }
 
     const ok = await saveStep();
     if (!ok) return;
@@ -249,13 +386,18 @@ export default function ApplicationForm() {
   };
 
   const handleSubmit = async () => {
-    if (!isStep1Valid() || !validateStep2()) {
+    if (!isStep1Valid() || !validateStep2() || !validateStep3()) {
       setError("Please complete all required fields before submitting.");
       return;
     }
 
-    if (!documents || documents.length === 0) {
-      setError("Please upload required documents before submitting.");
+    const requiredDocs = docTypes.map((d) => d.type);
+    const hasRequiredDocs = requiredDocs.every((type) =>
+      documents?.some((d) => d.type === type),
+    );
+
+    if (!hasRequiredDocs) {
+      setError("Please upload Passport Copy and Passport Photo.");
       return;
     }
 
@@ -282,6 +424,10 @@ export default function ApplicationForm() {
     );
   };
   const handleFileUpload = async (docType: string, file: File) => {
+    if (file.size > 10 * 1024 * 1024) {
+      setError("File size cannot exceed 10MB");
+      return;
+    }
     setUploadingType(docType);
     const reader = new FileReader();
     reader.onload = () => {
@@ -467,9 +613,20 @@ export default function ApplicationForm() {
                   <input
                     type="date"
                     min={today}
-                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm"
+                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground"
                     value={formData.travelDate}
-                    onChange={(e) => handleUpdate("travelDate", e.target.value)}
+                    onChange={(e) => {
+                      const travelDate = e.target.value;
+
+                      setFormData((prev) => ({
+                        ...prev,
+                        travelDate,
+                        returnDate:
+                          prev.returnDate && prev.returnDate <= travelDate
+                            ? ""
+                            : prev.returnDate,
+                      }));
+                    }}
                   />
                 </div>
                 <div>
@@ -479,12 +636,13 @@ export default function ApplicationForm() {
                   <input
                     type="date"
                     min={formData.travelDate || today}
-                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm"
+                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                     value={formData.returnDate}
                     onChange={(e) => handleUpdate("returnDate", e.target.value)}
                   />
                 </div>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
                   Purpose of Visit
@@ -533,9 +691,10 @@ export default function ApplicationForm() {
                   onClick={() => {
                     const input = document.createElement("input");
                     input.type = "file";
-                    input.accept = "image/*,.pdf";
+                    input.accept = "image/*";
                     input.onchange = (e) => {
                       const file = (e.target as HTMLInputElement).files?.[0];
+
                       if (file) handleOcrScan(file);
                     };
                     input.click();
@@ -612,6 +771,11 @@ export default function ApplicationForm() {
                     value={formData.lastName}
                     onChange={(e) => handleUpdate("lastName", e.target.value)}
                   />
+                  {fieldErrors.lastName && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.lastName}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -630,6 +794,11 @@ export default function ApplicationForm() {
                       )
                     }
                   />
+                  {fieldErrors.passportNumber && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.passportNumber}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -637,27 +806,113 @@ export default function ApplicationForm() {
                   </label>
                   <input
                     type="date"
-                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                    min={today}
+                    className={cn(
+                      "w-full px-3.5 py-2.5 bg-background border rounded-lg text-sm text-foreground transition-all",
+                      fieldErrors.passportExpiry
+                        ? "border-red-500"
+                        : "border-input",
+                    )}
                     value={formData.passportExpiry}
                     onChange={(e) =>
                       handleUpdate("passportExpiry", e.target.value)
                     }
                   />
+
+                  {fieldErrors.passportExpiry && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.passportExpiry}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label>Nationality</label>
+
+                  <input
+                    className={cn(
+                      "w-full px-3.5 py-2.5 bg-background border rounded-lg text-sm text-foreground",
+                      fieldErrors.nationality
+                        ? "border-red-500"
+                        : "border-input",
+                    )}
+                    value={formData.nationality}
+                    onChange={(e) =>
+                      handleUpdate("nationality", e.target.value)
+                    }
+                  />
+                  {fieldErrors.nationality && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.nationality}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label>Passport Issue Date</label>
+
+                  <input
+                    type="date"
+                    className={cn(
+                      "w-full px-3.5 py-2.5 bg-background border rounded-lg text-sm text-foreground",
+                      fieldErrors.passportIssueDate
+                        ? "border-red-500"
+                        : "border-input",
+                    )}
+                    value={formData.passportIssueDate}
+                    onChange={(e) =>
+                      handleUpdate("passportIssueDate", e.target.value)
+                    }
+                  />
+                  {fieldErrors.passportIssueDate && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.passportIssueDate}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label>Place Of Birth</label>
+
+                  <input
+                    value={formData.placeOfBirth}
+                    onChange={(e) =>
+                      handleUpdate("placeOfBirth", e.target.value)
+                    }
+                    className={cn(
+                      "w-full px-3.5 py-2.5 bg-background border rounded-lg text-sm text-foreground",
+                      fieldErrors.placeOfBirth
+                        ? "border-red-500"
+                        : "border-input",
+                    )}
+                  />
+                  {fieldErrors.placeOfBirth && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.placeOfBirth}
+                    </p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Date of Birth
                   </label>
                   <input
                     type="date"
+                    max={today}
                     className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                     value={formData.dateOfBirth}
                     onChange={(e) =>
                       handleUpdate("dateOfBirth", e.target.value)
                     }
                   />
+
+                  {fieldErrors.dateOfBirth && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.dateOfBirth}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -673,6 +928,11 @@ export default function ApplicationForm() {
                     <option value="female">Female</option>
                     <option value="other">Other</option>
                   </select>
+                  {fieldErrors.gender && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.gender}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -703,23 +963,43 @@ export default function ApplicationForm() {
                   Hotel / Accommodation Name
                 </label>
                 <input
-                  className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
+                  className={cn(
+                    "w-full px-3.5 py-2.5 bg-background border rounded-lg text-sm text-foreground",
+                    fieldErrors.hotelName ? "border-red-500" : "border-input",
+                  )}
                   placeholder="Grand Hotel Dubai"
                   value={formData.hotelName}
                   onChange={(e) => handleUpdate("hotelName", e.target.value)}
                 />
+
+                {fieldErrors.hotelName && (
+                  <p className="text-xs text-red-500 mt-1">
+                    {fieldErrors.hotelName}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-foreground mb-1.5">
                   Full Address
                 </label>
                 <textarea
-                  className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all resize-none"
+                  className={cn(
+                    "w-full px-3.5 py-2.5 bg-background border rounded-lg text-sm text-foreground resize-none",
+                    fieldErrors.hotelAddress
+                      ? "border-red-500"
+                      : "border-input",
+                  )}
                   rows={3}
                   placeholder="Sheikh Zayed Road, Dubai, UAE"
                   value={formData.hotelAddress}
                   onChange={(e) => handleUpdate("hotelAddress", e.target.value)}
                 />
+
+                {fieldErrors.hotelAddress && (
+                  <p className="text-xs text-red-500 mt-1">
+                    {fieldErrors.hotelAddress}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -729,6 +1009,7 @@ export default function ApplicationForm() {
               <h2 className="font-semibold text-foreground text-lg">
                 Upload Documents
               </h2>
+
               <p className="text-sm text-muted-foreground">
                 Upload clear scans or photos. Accepted: PDF, JPG, PNG (max 10MB
                 each).
@@ -822,7 +1103,7 @@ export default function ApplicationForm() {
                         {app.countryName}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {app.visaType.replace(/_/g, " ")}
+                        {(app.visaType ?? "").replace(/_/g, " ")}
                       </p>
                     </div>
                     <div className="ml-auto text-right">
@@ -834,26 +1115,19 @@ export default function ApplicationForm() {
                   </div>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                     {[
+                      ["Travel Date", formData.travelDate || "—"],
+                      ["Return Date", formData.returnDate || "—"],
                       [
-                        "Travel Date",
-                        app.travelDate || formData.travelDate || "—",
+                        "Purpose",
+                        formData.purpose === "other"
+                          ? formData.purposeOther
+                          : formData.purpose || "—",
                       ],
-                      [
-                        "Return Date",
-                        app.returnDate || formData.returnDate || "—",
-                      ],
-                      ["Purpose", app.purpose || formData.purpose || "—"],
-                      [
-                        "Passport",
-                        app.passportNumber || formData.passportNumber || "—",
-                      ],
+                      ["Passport", formData.passportNumber || "—"],
                       [
                         "Name",
-                        app.firstName
-                          ? `${app.firstName} ${app.lastName}`
-                          : formData.firstName
-                            ? `${formData.firstName} ${formData.lastName}`
-                            : "—",
+                        `${formData.firstName} ${formData.lastName}`.trim() ||
+                          "—",
                       ],
                       ["Documents", `${documents?.length ?? 0} uploaded`],
                     ].map(([label, value]) => (
@@ -896,11 +1170,7 @@ export default function ApplicationForm() {
         {step < 5 ? (
           <button
             onClick={handleNext}
-            disabled={
-              saving ||
-              (step === 1 && !isStep1Valid()) ||
-              (step === 2 && !validateStep2())
-            }
+            disabled={saving || (step === 1 && !isStep1Valid())}
             className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-60"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -910,7 +1180,7 @@ export default function ApplicationForm() {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={submitMutation.isPending}
+            disabled={submitMutation.isPending || saving}
             className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-60"
           >
             {submitMutation.isPending ? (
