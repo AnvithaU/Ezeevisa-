@@ -48,3 +48,7 @@ Thumbs.db
 .cache/
 .local/
 artifacts/api-server/uploads/
+
+# Environment variables
+.env
+.env.*
