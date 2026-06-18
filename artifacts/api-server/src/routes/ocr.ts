@@ -1,51 +1,6 @@
 import axios from "axios";
 import { Router, IRouter } from "express";
 import { requireAuth, type AuthRequest } from "../middlewares/auth";
-import { execSync, spawn } from "child_process";
-import path from "path";
-
-// ============================================================================
-// 🚀 MAGIC: AUTOMATICALLY START THE PYTHON SERVER IN THE BACKGROUND
-// ============================================================================
-try {
-  const ocrDir = path.join(process.cwd(), "artifacts/api-server/python-ocr");
-
-  console.log("🐍 Attempting to launch Python OCR Server...");
-  console.log("Current working directory:", process.cwd());
-  console.log("Node PATH:", process.env.PATH);
-
-  try {
-    const py = execSync("which python3").toString().trim();
-    console.log("Found python3:", py);
-  } catch (e) {
-    console.error("Could not find python3");
-  }
-
-  const pythonProcess = spawn("python3", ["-u", "app.py"], {
-    cwd: ocrDir,
-    env: {
-      ...process.env,
-      PYTHONPATH: `${process.cwd()}/.pythonlibs/lib/python3.11/site-packages:${process.env.PYTHONPATH || ""}`,
-    },
-  });
-
-  pythonProcess.stdout.on("data", (data) =>
-    console.log(`[Python]: ${data.toString().trim()}`),
-  );
-
-  pythonProcess.stderr.on("data", (data) =>
-    console.error(`[Python Log]: ${data.toString().trim()}`),
-  );
-
-  pythonProcess.on("error", (error) => {
-    console.error(`[Python Launch Error]:`, error.message);
-  });
-} catch (err) {
-  console.error("Could not setup Python process:", err);
-}
-
-// ============================================================================
-// ============================================================================
 
 const router: IRouter = Router();
 
