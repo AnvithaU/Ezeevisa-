@@ -1,5 +1,7 @@
 import { Switch, Route, Router as WouterRouter } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import WriteReview from "./pages/WriteReview";
+import GroupDashboard from "./pages/GroupDashboard";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -19,6 +21,8 @@ import ApplicationForm from "@/pages/ApplicationForm";
 import Applications from "@/pages/Applications";
 import ApplicationDetail from "@/pages/ApplicationDetail";
 import Track from "@/pages/Track";
+import ContactUs from "@/pages/ContactUs"; // ADDED
+import Reviews from "@/pages/Reviews"; // ADDED
 import NotFound from "@/pages/NotFound";
 import { useEffect, useState } from "react";
 import { customFetch } from "@/lib/customFetch";
@@ -46,12 +50,18 @@ function Router() {
         <Route path="/signin" component={Login} />
         <Route path="/register" component={Register} />
         <Route path="/verify-otp" component={VerifyOtp} />
+        <Route path="/write-review" component={WriteReview} />
+        <Route path="/apply/group/:groupId" component={GroupDashboard} />
 
         <Route>
           <Layout>
             <Switch>
               <Route path="/" component={Landing} />
               <Route path="/track" component={Track} />
+
+              {/* NEW ROUTES */}
+              <Route path="/contact" component={ContactUs} />
+              <Route path="/reviews" component={Reviews} />
 
               <Route path="/dashboard">
                 <ProtectedRoute>

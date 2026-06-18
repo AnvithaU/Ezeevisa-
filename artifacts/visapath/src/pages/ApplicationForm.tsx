@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect } from "react";
+import { VISA_REQUIREMENTS } from "@/lib/visaRequirements";
 import {
   useGetApplication,
   useUpdateApplication,
@@ -14,7 +15,7 @@ import {
   getGetDashboardSummaryQueryKey,
   getListApplicationDocumentsQueryKey,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   ArrowLeft,
@@ -30,7 +31,26 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { customFetch } from "@/lib/customFetch";
+type FormData = {
+  travelDate: string;
+  returnDate: string;
+  purpose: string;
+  passportNumber: string;
+  passportExpiry: string;
+  passportIssueDate: string;
 
+  firstName: string;
+  lastName: string;
+  nationality: string;
+  placeOfBirth: string;
+  dateOfBirth: string;
+  gender: string;
+  occupation: string;
+  hotelName: string;
+  hotelAddress: string;
+
+  purposeOther: string;
+};
 const STEPS = [
   { id: 1, label: "Travel Details" },
   { id: 2, label: "Personal Info" },
@@ -41,10 +61,21 @@ const STEPS = [
 
 export default function ApplicationForm() {
   const { id } = useParams<{ id: string }>();
-  const appId = parseInt(id!, 10);
+  const appId = Number(id);
+
+  if (!id || Number.isNaN(appId)) {
+    return (
+      <div className="p-4 text-red-500">
+        Invalid application link. Please go back and try again.
+      </div>
+    );
+  }
   const [, setLocation] = useLocation();
+  const [showScanner, setShowScanner] = useState(false);
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
+  const [declarationChecked, setDeclarationChecked] = useState(false);
+  const [showReviewScreen, setShowReviewScreen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const today = new Date().toISOString().split("T")[0];
@@ -83,6 +114,20 @@ export default function ApplicationForm() {
       queryKey: getListApplicationDocumentsQueryKey(appId),
     },
   });
+  // Fetch group data to figure out which traveler number this is!
+  const { data: groupData } = useQuery({
+    queryKey: ["group-applications", (app as any)?.groupId],
+    queryFn: async () => {
+      return await customFetch<{ applications: any[] }>(
+        `/api/applications/group/${(app as any).groupId}`,
+      );
+    },
+    enabled: !!(app as any)?.groupId,
+  });
+
+  const travelerIndex = groupData?.applications
+    ? groupData.applications.findIndex((a: any) => a.id === appId) + 1
+    : 0;
 
   const updateMutation = useUpdateApplication();
   const submitMutation = useSubmitApplication();
@@ -91,70 +136,174 @@ export default function ApplicationForm() {
 
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
+  const [passportFrontFile, setPassportFrontFile] = useState<File | null>(null);
+  const passportFrontUploaded = documents?.find(
+    (d) => d.type === "passport_front",
+  );
+
+  const [ocrMeta, setOcrMeta] = useState({
+    confidence: 0,
+    mrzDetected: false,
+  });
+  const ocrTriggeredRef = useRef(false);
+
+  const [passportBackFile, setPassportBackFile] = useState<File | null>(null);
+  const passportBackUploaded = documents?.find(
+    (d) => d.type === "passport_back",
+  );
   const [ocrSuccess, setOcrSuccess] = useState(false);
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (ocrLoading) return;
 
-  const handleOcrScan = async (file: File) => {
+    if (passportFrontFile && passportBackFile && !ocrTriggeredRef.current) {
+      ocrTriggeredRef.current = true;
+
+      handleOcrScan([passportFrontFile, passportBackFile]);
+    }
+  }, [passportFrontFile, passportBackFile]);
+
+  const handleOcrScan = async (files: File[]) => {
     setOcrLoading(true);
+    setShowScanner(false);
     setOcrError(null);
     setOcrSuccess(false);
-    const reader = new FileReader();
 
-    reader.onload = async () => {
-      try {
-        const dataUrl = typeof reader.result === "string" ? reader.result : "";
+    try {
+      const dataUrls = await Promise.all(
+        files.map(
+          (file) =>
+            new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
 
-        if (!dataUrl) throw new Error("File read failed");
+              reader.onload = () => resolve(reader.result as string);
 
-        const extracted = await customFetch<{
-          firstName: string;
-          lastName: string;
-          passportNumber: string;
-          dateOfBirth: string;
-          passportExpiry: string;
-          gender: string;
-        }>("/api/ocr/passport", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dataUrl }),
-        });
+              reader.onerror = reject;
 
-        console.log("OCR extracted:", extracted);
+              reader.readAsDataURL(file);
+            }),
+        ),
+      );
 
-        setFormData((prev) => ({
+      const extracted = await customFetch<{
+        firstName: string;
+        lastName: string;
+        passportNumber: string;
+        dateOfBirth: string;
+        passportExpiry: string;
+        gender: string;
+        nationality: string;
+        placeOfBirth: string;
+        passportIssueDate: string;
+
+        mrzDetected: boolean;
+        confidence: number;
+
+        documentQuality: "good" | "acceptable" | "poor";
+
+        isExpired: boolean;
+        isBlurry: boolean;
+        isCutOff: boolean;
+        hasGlare: boolean;
+
+        validationMessage: string;
+      }>("/api/ocr/passport", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          files: dataUrls,
+        }),
+      });
+      // 1. Check for Expiration First
+      if (extracted.isExpired) {
+        setOcrSuccess(false);
+        setOcrError("Passport is expired. Please upload a valid passport.");
+        // Instantly turn the Passport Expiry input field red!
+        setFieldErrors((prev) => ({
           ...prev,
-          firstName:
-            extracted?.firstName && extracted.firstName !== "UNKNOWN"
-              ? extracted.firstName
-              : prev.firstName,
-          lastName:
-            extracted?.lastName && extracted.lastName !== "UNKNOWN"
-              ? extracted.lastName
-              : prev.lastName,
-
-          passportNumber: extracted?.passportNumber?.trim()
-            ? extracted.passportNumber
-            : prev.passportNumber,
-          dateOfBirth: extracted?.dateOfBirth || prev.dateOfBirth,
-          passportExpiry: extracted?.passportExpiry || prev.passportExpiry,
-          gender: extracted?.gender || prev.gender,
+          passportExpiry: "Passport is expired",
         }));
-
-        setOcrSuccess(true);
-        setTimeout(() => setOcrSuccess(false), 4000);
-      } catch (err) {
-        console.error(err);
-        setOcrError("Could not read passport. Please fill manually.");
-      } finally {
-        setOcrLoading(false);
       }
-    };
+      // 2. Then check for blur/glare
+      else if (extracted.isBlurry || extracted.isCutOff || extracted.hasGlare) {
+        setOcrSuccess(false);
+        setOcrError(
+          "Passport image quality is poor. Please verify all extracted information.",
+        );
+      }
+      // 3. Only show success if it's a valid, unexpired, clear passport
+      else {
+        setOcrSuccess(true);
+        setShowScanner(false);
+        setTimeout(() => setOcrSuccess(false), 4000);
+      }
 
-    reader.readAsDataURL(file);
+      setOcrMeta({
+        confidence: extracted.confidence,
+        mrzDetected: extracted.mrzDetected,
+      });
+
+      setFormData((prev) => ({
+        ...prev,
+        firstName:
+          extracted?.firstName && extracted.firstName !== "UNKNOWN"
+            ? extracted.firstName.toUpperCase()
+            : prev.firstName,
+        lastName:
+          extracted?.lastName && extracted.lastName !== "UNKNOWN"
+            ? extracted.lastName.toUpperCase()
+            : prev.lastName,
+        passportNumber: extracted?.passportNumber?.trim()
+          ? extracted.passportNumber.toUpperCase()
+          : prev.passportNumber,
+        // ... rest of the fields
+        dateOfBirth: extracted?.dateOfBirth || prev.dateOfBirth,
+        passportExpiry: extracted?.passportExpiry || prev.passportExpiry,
+        gender: extracted?.gender || prev.gender,
+        nationality: extracted?.nationality || prev.nationality,
+        placeOfBirth: extracted?.placeOfBirth || prev.placeOfBirth,
+        passportIssueDate:
+          extracted?.passportIssueDate || prev.passportIssueDate,
+      }));
+
+      if (!extracted.isBlurry && !extracted.isCutOff && !extracted.hasGlare) {
+        setOcrSuccess(true);
+      }
+      setTimeout(() => setOcrSuccess(false), 4000);
+    } catch (err: any) {
+      console.error("OCR FRONTEND ERROR:", err);
+
+      setOcrError(
+        err?.message || "Could not read passport. Please fill manually.",
+      );
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
+    travelDate: "",
+    returnDate: "",
+    purpose: "",
+    passportNumber: "",
+    passportExpiry: "",
+    passportIssueDate: "",
+
+    firstName: "",
+    lastName: "",
+    nationality: "",
+    placeOfBirth: "",
+    dateOfBirth: "",
+    gender: "",
+    occupation: "",
+    hotelName: "",
+    hotelAddress: "",
+    purposeOther: "",
+  });
+  const normalize = (app: any): FormData => ({
     travelDate: app?.travelDate ?? "",
     returnDate: app?.returnDate ?? "",
     purpose: app?.purpose ?? "",
@@ -171,37 +320,25 @@ export default function ApplicationForm() {
     occupation: app?.occupation ?? "",
     hotelName: app?.hotelName ?? "",
     hotelAddress: app?.hotelAddress ?? "",
-    purposeOther: "",
+    purposeOther: app?.purposeOther ?? "",
   });
-  useEffect(() => {
-    if (!app) return;
+  const initializedRef = useRef(false);
 
-    setFormData({
-      travelDate: app.travelDate ?? "",
-      returnDate: app.returnDate ?? "",
-      purpose: app.purpose ?? "",
-      passportNumber: app.passportNumber ?? "",
-      passportExpiry: app.passportExpiry ?? "",
-      passportIssueDate: app?.passportIssueDate ?? "",
-      firstName: app.firstName ?? "",
-      lastName: app.lastName ?? "",
-      nationality: app?.nationality ?? "",
-      placeOfBirth: app?.placeOfBirth ?? "",
-      dateOfBirth: app.dateOfBirth ?? "",
-      gender: app.gender ?? "",
-      occupation: app.occupation ?? "",
-      hotelName: app.hotelName ?? "",
-      hotelAddress: app.hotelAddress ?? "",
-      purposeOther: "",
-    });
+  useEffect(() => {
+    if (app && !initializedRef.current) {
+      setFormData(normalize(app));
+      initializedRef.current = true;
+    }
   }, [app]);
 
   const handleUpdate = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
 
-    // clear error when user starts fixing field
     if (fieldErrors[field]) {
-      setFieldErrors((prev) => ({ ...prev, [field]: "" }));
+      setFieldErrors((prev) => ({
+        ...prev,
+        [field]: "",
+      }));
     }
   };
   const isStep1Valid = () => {
@@ -245,6 +382,9 @@ export default function ApplicationForm() {
       errors.passportExpiry = "Passport expiry is required";
     if (!formData.dateOfBirth) errors.dateOfBirth = "Date of birth is required";
     if (!formData.gender) errors.gender = "Please select gender";
+    if (!formData.occupation) {
+      errors.occupation = "Occupation is required";
+    }
 
     const todayDate = new Date(today);
     const dob = parseLocalDate(formData.dateOfBirth);
@@ -255,44 +395,66 @@ export default function ApplicationForm() {
         errors.passportIssueDate =
           "Passport issue date cannot be in the future";
       }
+      if (dob && issueDate <= dob) {
+        errors.passportIssueDate =
+          "Passport issue date must be after date of birth";
+      }
 
       if (expiry && issueDate >= expiry) {
         errors.passportIssueDate = "Issue date must be before expiry date";
       }
+
+      if (expiry) {
+        const validityYears =
+          (expiry.getTime() - issueDate.getTime()) /
+          (1000 * 60 * 60 * 24 * 365);
+
+        if (validityYears < 1) {
+          errors.passportExpiry = "Passport validity period appears invalid";
+        }
+
+        if (validityYears > 10.5) {
+          errors.passportExpiry = "Passport validity period appears invalid";
+        }
+      }
     }
     const travelDate = parseLocalDate(formData.travelDate);
     // DOB validation
-    if (formData.dateOfBirth && dob) {
-      const age = calculateAge(formData.dateOfBirth);
 
+    const age = calculateAge(formData.dateOfBirth);
+
+    if (dob) {
       if (dob > todayDate) {
         errors.dateOfBirth = "Date of birth cannot be in the future";
       } else if (age > 120) {
         errors.dateOfBirth = "Enter a valid date of birth";
       }
     }
-    // Passport expiry validation
 
+    // Passport expiry validation
     if (formData.passportExpiry && expiry) {
       if (expiry <= todayDate) {
         errors.passportExpiry = "Passport is expired";
       }
+    }
 
-      if (travelDate && expiry <= travelDate) {
+    if (travelDate && expiry) {
+      if (expiry <= travelDate) {
         errors.passportExpiry = "Passport must remain valid after travel date";
       }
 
-      if (travelDate) {
-        const sixMonthsAfterTravel = new Date(travelDate);
+      const sixMonthsAfterTravel = new Date(travelDate);
+      sixMonthsAfterTravel.setMonth(sixMonthsAfterTravel.getMonth() + 6);
 
-        sixMonthsAfterTravel.setMonth(sixMonthsAfterTravel.getMonth() + 6);
-
-        if (expiry < sixMonthsAfterTravel) {
-          errors.passportExpiry =
-            "Passport must be valid for at least 6 months after travel date";
-        }
+      if (expiry < sixMonthsAfterTravel) {
+        errors.passportExpiry =
+          "Passport must be valid for at least 6 months after travel date";
       }
     }
+    if (travelDate && issueDate && travelDate < issueDate) {
+      errors.travelDate = "Travel date cannot be before passport issue date";
+    }
+
     // Passport number validation
     const passportRegex = /^[A-Z0-9]{6,15}$/;
 
@@ -318,10 +480,7 @@ export default function ApplicationForm() {
       errors.hotelAddress = "Accommodation address is required";
     }
 
-    setFieldErrors((prev) => ({
-      ...prev,
-      ...errors,
-    }));
+    setFieldErrors(errors);
 
     return Object.keys(errors).length === 0;
   };
@@ -365,7 +524,11 @@ export default function ApplicationForm() {
       return;
     }
     if (step === 4) {
-      const requiredDocs = docTypes.map((d) => d.type);
+      const requiredDocs = [
+        "passport_front",
+        "passport_back",
+        ...docTypes.filter((d) => d.required).map((d) => d.type),
+      ];
       console.log("STEP 4 VALIDATION RUNNING");
       console.log(documents);
 
@@ -391,13 +554,19 @@ export default function ApplicationForm() {
       return;
     }
 
-    const requiredDocs = docTypes.map((d) => d.type);
+    const requiredDocs = [
+      "passport_front",
+      "passport_back",
+      ...docTypes.filter((d) => d.required).map((d) => d.type),
+    ];
     const hasRequiredDocs = requiredDocs.every((type) =>
       documents?.some((d) => d.type === type),
     );
 
     if (!hasRequiredDocs) {
-      setError("Please upload Passport Copy and Passport Photo.");
+      setError(
+        "Please upload passport front page, passport back page and passport photo.",
+      );
       return;
     }
 
@@ -414,7 +583,7 @@ export default function ApplicationForm() {
           queryClient.invalidateQueries({
             queryKey: getGetDashboardSummaryQueryKey(),
           });
-          setLocation(`/applications/${appId}`);
+          setShowReviewScreen(true);
         },
         onError: (err: any) => {
           setError(err?.data?.error || "Failed to submit application");
@@ -426,6 +595,12 @@ export default function ApplicationForm() {
   const handleFileUpload = async (docType: string, file: File) => {
     if (file.size > 10 * 1024 * 1024) {
       setError("File size cannot exceed 10MB");
+      return;
+    }
+    const allowedTypes = ["image/jpeg", "image/png"];
+
+    if (!allowedTypes.includes(file.type)) {
+      setError("Invalid file type");
       return;
     }
     setUploadingType(docType);
@@ -472,13 +647,13 @@ export default function ApplicationForm() {
     );
   };
 
-  const docTypes = [
-    {
-      type: "passport_copy",
-      label: "Passport Copy",
-      required: true,
-      desc: "Front page with photo",
-    },
+  // DYNAMIC DOCUMENT TYPES BASED ON COUNTRY
+  const countryConfig = app?.countryCode
+    ? VISA_REQUIREMENTS[app.countryCode]
+    : null;
+
+  // If we don't have a specific config for this country yet, fallback to a default set
+  const fallbackDocs = [
     {
       type: "photo",
       label: "Passport Photo",
@@ -486,24 +661,22 @@ export default function ApplicationForm() {
       desc: "Recent passport-size photo",
     },
     {
-      type: "bank_statement",
-      label: "Bank Statement",
-      required: false,
-      desc: "Last 3 months",
-    },
-    {
-      type: "hotel_booking",
-      label: "Hotel Booking",
-      required: false,
-      desc: "Confirmed accommodation",
-    },
-    {
       type: "return_ticket",
       label: "Return Ticket",
-      required: false,
+      required: true,
       desc: "Confirmed flight booking",
     },
   ];
+
+  // Map the configuration to the format our UI and Validation expects!
+  const docTypes = countryConfig
+    ? countryConfig.documents.map((doc) => ({
+        type: doc.id,
+        label: doc.title,
+        required: true,
+        desc: doc.description,
+      }))
+    : fallbackDocs;
 
   if (isLoading) {
     return (
@@ -515,13 +688,76 @@ export default function ApplicationForm() {
 
   if (!app) return null;
 
+  if (showReviewScreen) {
+    return (
+      <div className="max-w-xl mx-auto px-4 py-16 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="bg-card border border-border shadow-xl rounded-2xl p-8 md:p-12 relative overflow-hidden"
+        >
+          {/* Background Glow */}
+          <div className="absolute inset-0 bg-primary/5 pointer-events-none" />
+
+          <div className="w-20 h-20 bg-emerald-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Check className="w-10 h-10 text-emerald-500" />
+          </div>
+
+          <h2 className="text-3xl font-bold text-foreground mb-3 font-serif">
+            Application Submitted!
+          </h2>
+          <p className="text-muted-foreground mb-8">
+            Your e-Visa application for {app.countryName} has been successfully
+            submitted. We will process it shortly.
+          </p>
+          <div className="bg-muted/30 border border-border rounded-xl p-8 mb-4">
+            <h3 className="text-lg font-bold text-foreground mb-2">
+              Would you like to leave a review?
+            </h3>
+            <p className="text-sm text-muted-foreground mb-8">
+              Share your seamless visa experience with thousands of other
+              travelers.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <button
+                onClick={() => setLocation("/write-review")}
+                className="px-8 py-3 bg-primary text-primary-foreground rounded-xl font-bold hover:bg-primary/90 transition-all shadow-md"
+              >
+                Yes, OK!
+              </button>
+              <button
+                onClick={() =>
+                  setLocation(
+                    (app as any).groupId
+                      ? `/apply/group/${(app as any).groupId}`
+                      : "/applications",
+                  )
+                }
+                className="px-8 py-3 bg-background border border-border text-foreground rounded-xl font-semibold hover:bg-muted transition-all"
+              >
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
       {/* Back */}
-      <Link href="/applications">
+      <Link
+        href={
+          (app as any).groupId
+            ? `/apply/group/${(app as any).groupId}`
+            : "/applications"
+        }
+      >
         <div className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm mb-6 cursor-pointer transition-colors">
           <ArrowLeft className="w-4 h-4" />
-          My Applications
+          {(app as any).groupId ? "Back to Group Dashboard" : "My Applications"}
         </div>
       </Link>
 
@@ -529,9 +765,22 @@ export default function ApplicationForm() {
       <div className="flex items-center gap-3 mb-6">
         <span className="text-3xl">{app.countryFlag}</span>
         <div>
-          <h1 className="text-xl font-bold text-foreground">
+          <h1 className="text-xl font-bold text-foreground flex items-center gap-4">
             {app.countryName} — e-Visa
+            {travelerIndex > 0 && (
+              <div className="group relative flex items-center justify-center">
+                {/* Glowing Aura Effect */}
+                <div className="absolute inset-0 bg-primary/20 rounded-full blur-md group-hover:bg-primary/40 transition-all duration-500"></div>
+
+                {/* Sleek Glassmorphic Badge */}
+                <span className="relative flex items-center gap-1.5 px-3 py-1 bg-background/80 border border-primary/30 text-primary rounded-full text-xs font-bold uppercase tracking-widest backdrop-blur-sm shadow-sm transition-all duration-300 group-hover:border-primary/60">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Traveler {travelerIndex}
+                </span>
+              </div>
+            )}
           </h1>
+
           <p className="text-sm text-muted-foreground">
             {(app.visaType ?? "").replace(/_/g, " ")}
           </p>
@@ -539,13 +788,15 @@ export default function ApplicationForm() {
       </div>
 
       {/* Step indicator */}
-      <div className="flex items-center gap-0 mb-8">
+      {/* Step indicator */}
+      <div className="flex items-center mb-8">
         {STEPS.map((s, idx) => (
           <div key={s.id} className="flex items-center flex-1">
-            <div className="flex flex-col items-center flex-1">
+            {/* Circle + Label */}
+            <div className="flex flex-col items-center shrink-0">
               <div
                 className={cn(
-                  "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all",
+                  "w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all duration-300",
                   step > s.id
                     ? "bg-primary border-primary text-primary-foreground"
                     : step === s.id
@@ -555,9 +806,10 @@ export default function ApplicationForm() {
               >
                 {step > s.id ? <Check className="w-4 h-4" /> : s.id}
               </div>
+
               <span
                 className={cn(
-                  "text-xs mt-1 hidden sm:block text-center",
+                  "hidden sm:block text-xs text-center mt-2 w-24",
                   step === s.id
                     ? "text-primary font-medium"
                     : "text-muted-foreground",
@@ -566,18 +818,25 @@ export default function ApplicationForm() {
                 {s.label}
               </span>
             </div>
+
+            {/* Connector */}
             {idx < STEPS.length - 1 && (
-              <div
-                className={cn(
-                  "h-0.5 flex-1 -mt-4 sm:-mt-5",
-                  step > s.id ? "bg-primary" : "bg-border",
-                )}
-              />
+              <div className="flex-1 h-[2px] relative mb-5">
+                {/* Base line */}
+                <div className="absolute inset-0 bg-border rounded-full" />
+
+                {/* Progress line */}
+                <div
+                  className={cn(
+                    "absolute inset-0 rounded-full transition-all duration-300",
+                    step > s.id ? "bg-primary" : "bg-transparent",
+                  )}
+                />
+              </div>
             )}
           </div>
         ))}
       </div>
-
       {/* Error */}
       {error && (
         <motion.div
@@ -628,6 +887,11 @@ export default function ApplicationForm() {
                       }));
                     }}
                   />
+                  {fieldErrors.travelDate && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.travelDate}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -681,38 +945,137 @@ export default function ApplicationForm() {
 
           {step === 2 && (
             <div className="space-y-5">
-              <div className="flex items-start justify-between gap-4">
+              <div className="space-y-4">
                 <h2 className="font-semibold text-foreground text-lg">
                   Personal Information
                 </h2>
+
+                {/* SINGLE GOLD "SCAN PASSPORT" BUTTON */}
                 <button
                   type="button"
-                  disabled={ocrLoading}
-                  onClick={() => {
-                    const input = document.createElement("input");
-                    input.type = "file";
-                    input.accept = "image/*";
-                    input.onchange = (e) => {
-                      const file = (e.target as HTMLInputElement).files?.[0];
-
-                      if (file) handleOcrScan(file);
-                    };
-                    input.click();
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-medium rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-60 flex-shrink-0"
-                >
-                  {ocrLoading ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />{" "}
-                      Scanning...
-                    </>
-                  ) : (
-                    <>
-                      <ScanLine className="w-3.5 h-3.5" /> Scan Passport
-                    </>
+                  onClick={() => setShowScanner(!showScanner)}
+                  className={cn(
+                    "flex items-center gap-2 px-5 py-2.5 text-sm font-bold rounded-xl transition-all shadow-sm border",
+                    showScanner
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20",
                   )}
+                >
+                  {/* 1. Icon Logic (Spinner -> Check -> ScanLine) */}
+                  {ocrLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (passportFrontFile || passportFrontUploaded) &&
+                    (passportBackFile || passportBackUploaded) ? (
+                    <Check className="w-5 h-5 text-emerald-500" />
+                  ) : (
+                    <ScanLine className="w-5 h-5" />
+                  )}
+
+                  {/* 2. Text Logic */}
+                  {ocrLoading
+                    ? "Scanning Passport..."
+                    : showScanner
+                      ? "Close Scanner"
+                      : (passportFrontFile || passportFrontUploaded) &&
+                          (passportBackFile || passportBackUploaded)
+                        ? "Passport Scanned"
+                        : "Scan Passport"}
                 </button>
+
+                {/* EXPANDABLE UPLOAD AREA */}
+                <AnimatePresence>
+                  {showScanner && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, y: -10 }}
+                      animate={{ opacity: 1, height: "auto", y: 0 }}
+                      exit={{ opacity: 0, height: 0, y: -10 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-5 mt-2 bg-card border border-border shadow-sm rounded-xl space-y-4 relative">
+                        {/* Subtle gold glow inside the box */}
+                        <div className="absolute inset-0 bg-primary/5 rounded-xl pointer-events-none" />
+
+                        <p className="text-sm font-medium text-foreground relative z-10">
+                          Upload both the passport photo page (front) and the
+                          address page (back) for automatic data extraction.
+                        </p>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+                          {/* Front Page Upload */}
+                          <div>
+                            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                              Front Page (Photo) *
+                            </label>
+                            <button
+                              type="button"
+                              disabled={ocrLoading}
+                              className="flex items-center gap-2 w-full px-4 py-2.5 bg-background border border-border text-foreground text-sm font-medium rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => {
+                                const input = document.createElement("input");
+                                input.type = "file";
+                                input.accept = ".jpg,.jpeg,.png";
+                                input.onchange = (e) => {
+                                  const file = (e.target as HTMLInputElement)
+                                    .files?.[0];
+                                  if (file) {
+                                    ocrTriggeredRef.current = false;
+                                    setPassportFrontFile(file);
+                                    handleFileUpload("passport_front", file);
+                                  }
+                                };
+                                input.click();
+                              }}
+                            >
+                              <Upload className="w-4 h-4 text-primary shrink-0" />
+                              <span className="truncate">
+                                {passportFrontFile?.name ||
+                                  passportFrontUploaded?.originalName ||
+                                  "Upload Front Page"}
+                              </span>
+                            </button>
+                          </div>
+
+                          {/* Back Page Upload */}
+                          <div>
+                            <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                              Back Page (Address) *
+                            </label>
+                            <button
+                              type="button"
+                              disabled={ocrLoading}
+                              className="flex items-center gap-2 w-full px-4 py-2.5 bg-background border border-border text-foreground text-sm font-medium rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              onClick={() => {
+                                const input = document.createElement("input");
+                                input.type = "file";
+                                input.accept = ".jpg,.jpeg,.png";
+                                input.onchange = (e) => {
+                                  const file = (e.target as HTMLInputElement)
+                                    .files?.[0];
+                                  if (file) {
+                                    ocrTriggeredRef.current = false;
+                                    setPassportBackFile(file);
+                                    handleFileUpload("passport_back", file);
+                                  }
+                                };
+                                input.click();
+                              }}
+                            >
+                              <Upload className="w-4 h-4 text-primary shrink-0" />
+                              <span className="truncate">
+                                {passportBackFile?.name ||
+                                  passportBackUploaded?.originalName ||
+                                  "Upload Back Page"}
+                              </span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
+
+              {/* {ocrLoading && ( ... keep everything below here identical! */}
 
               {ocrSuccess && (
                 <motion.div
@@ -725,6 +1088,24 @@ export default function ApplicationForm() {
                   below.
                 </motion.div>
               )}
+              {ocrMeta.confidence > 0 && (
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    OCR Confidence: {(ocrMeta.confidence * 100).toFixed(0)}%
+                  </p>
+
+                  <p
+                    className={cn(
+                      "text-xs",
+                      ocrMeta.mrzDetected ? "text-green-500" : "text-amber-500",
+                    )}
+                  >
+                    {ocrMeta.mrzDetected
+                      ? "MRZ detected successfully"
+                      : "MRZ not detected"}
+                  </p>
+                </div>
+              )}
 
               {ocrError && (
                 <motion.div
@@ -734,6 +1115,17 @@ export default function ApplicationForm() {
                 >
                   <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
                   {ocrError}
+                  {passportFrontFile && passportBackFile && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleOcrScan([passportFrontFile, passportBackFile])
+                      }
+                      className="ml-auto text-xs underline"
+                    >
+                      Retry Scan
+                    </button>
+                  )}
                 </motion.div>
               )}
 
@@ -790,7 +1182,7 @@ export default function ApplicationForm() {
                     onChange={(e) =>
                       handleUpdate(
                         "passportNumber",
-                        e.target.value.toUpperCase(),
+                        e.target.value.toUpperCase().replace(/\s/g, ""),
                       )
                     }
                   />
@@ -854,6 +1246,7 @@ export default function ApplicationForm() {
 
                   <input
                     type="date"
+                    max={today}
                     className={cn(
                       "w-full px-3.5 py-2.5 bg-background border rounded-lg text-sm text-foreground",
                       fieldErrors.passportIssueDate
@@ -898,9 +1291,10 @@ export default function ApplicationForm() {
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Date of Birth
                   </label>
+
                   <input
-                    type="date"
                     max={today}
+                    type="date"
                     className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
                     value={formData.dateOfBirth}
                     onChange={(e) =>
@@ -938,12 +1332,27 @@ export default function ApplicationForm() {
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Occupation
                   </label>
-                  <input
-                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all"
-                    placeholder="Software Engineer"
+                  <select
+                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm"
                     value={formData.occupation}
                     onChange={(e) => handleUpdate("occupation", e.target.value)}
-                  />
+                  >
+                    <option value="">Select Occupation</option>
+                    <option value="student">Student</option>
+                    <option value="employed">Employed</option>
+                    <option value="self_employed">Self Employed</option>
+                    <option value="business_owner">Business Owner</option>
+                    <option value="government_employee">
+                      Government Employee
+                    </option>
+                    <option value="retired">Retired</option>
+                    <option value="unemployed">Unemployed</option>
+                  </select>
+                  {fieldErrors.occupation && (
+                    <p className="text-xs text-red-500 mt-1">
+                      {fieldErrors.occupation}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1011,7 +1420,7 @@ export default function ApplicationForm() {
               </h2>
 
               <p className="text-sm text-muted-foreground">
-                Upload clear scans or photos. Accepted: PDF, JPG, PNG (max 10MB
+                Upload clear scans or photos. Accepted: JPG, PNG (max 10MB
                 each).
               </p>
               <div className="space-y-3">
@@ -1061,7 +1470,7 @@ export default function ApplicationForm() {
                           onClick={() => {
                             const input = document.createElement("input");
                             input.type = "file";
-                            input.accept = ".pdf,.jpg,.jpeg,.png";
+                            input.accept = ".jpg,.jpeg,.png";
                             input.onchange = (e) => {
                               const file = (e.target as HTMLInputElement)
                                 .files?.[0];
@@ -1087,69 +1496,272 @@ export default function ApplicationForm() {
           )}
 
           {step === 5 && (
-            <div className="space-y-5">
-              <h2 className="font-semibold text-foreground text-lg">
-                Review & Submit
-              </h2>
-              <div className="space-y-4">
-                <div className="p-4 bg-muted/30 rounded-xl">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                    Application Summary
-                  </p>
-                  <div className="flex items-center gap-3 mb-4">
-                    <span className="text-3xl">{app.countryFlag}</span>
-                    <div>
-                      <p className="font-semibold text-foreground">
-                        {app.countryName}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {(app.visaType ?? "").replace(/_/g, " ")}
-                      </p>
-                    </div>
-                    <div className="ml-auto text-right">
-                      <p className="text-lg font-bold text-primary">
-                        {formatCurrency(app.fee)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Visa fee</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                    {[
-                      ["Travel Date", formData.travelDate || "—"],
-                      ["Return Date", formData.returnDate || "—"],
-                      [
-                        "Purpose",
-                        formData.purpose === "other"
-                          ? formData.purposeOther
-                          : formData.purpose || "—",
-                      ],
-                      ["Passport", formData.passportNumber || "—"],
-                      [
-                        "Name",
-                        `${formData.firstName} ${formData.lastName}`.trim() ||
-                          "—",
-                      ],
-                      ["Documents", `${documents?.length ?? 0} uploaded`],
-                    ].map(([label, value]) => (
-                      <div key={label}>
-                        <p className="text-xs text-muted-foreground">{label}</p>
-                        <p className="text-foreground font-medium">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            <div className="space-y-6">
+              <div className="text-center mb-6">
+                <h2 className="text-2xl font-bold text-foreground">
+                  Review & Submit
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Please ensure all details are exactly as they appear on your
+                  passport.
+                </p>
+              </div>
 
-                <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl">
-                  <p className="text-sm text-foreground font-medium mb-1">
-                    Before you submit
+              {/* Top Summary Banner with Flag & Fee */}
+              <div className="p-4 bg-primary/5 border border-primary/20 rounded-xl flex items-center gap-3">
+                <span className="text-4xl drop-shadow-sm">
+                  {app.countryFlag}
+                </span>
+                <div>
+                  <p className="font-bold text-foreground text-lg">
+                    {app.countryName}
                   </p>
-                  <ul className="text-xs text-muted-foreground space-y-1">
-                    <li>• Verify all details match your passport exactly</li>
-                    <li>• Ensure all required documents are uploaded</li>
-                    <li>• Travel dates must be within visa validity</li>
-                    <li>• Your e-visa will be emailed once approved</li>
-                  </ul>
+                  <p className="text-sm text-muted-foreground font-medium capitalize">
+                    {(app.visaType ?? "").replace(/_/g, " ")}
+                  </p>
                 </div>
+                <div className="ml-auto text-right">
+                  <p className="text-2xl font-bold text-primary">
+                    {formatCurrency(app.fee)}
+                  </p>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Total Visa Fee
+                  </p>
+                </div>
+              </div>
+
+              {/* Travel Details Card */}
+              <div className="bg-muted/30 border border-border rounded-xl p-5 relative group transition-all hover:border-primary/30 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setStep(1)}
+                  className="absolute top-4 right-4 text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <span className="hidden sm:inline">Edit</span> ✏️
+                </button>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">
+                  ✈️ Travel Details
+                </h3>
+                <div className="grid grid-cols-2 gap-y-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Destination
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {app.countryName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Purpose
+                    </span>
+                    <span className="font-semibold text-foreground capitalize">
+                      {formData.purpose === "other"
+                        ? formData.purposeOther
+                        : formData.purpose}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Travel Date
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formData.travelDate}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Return Date
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formData.returnDate}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Personal Info Card */}
+              <div className="bg-muted/30 border border-border rounded-xl p-5 relative group transition-all hover:border-primary/30 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="absolute top-4 right-4 text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <span className="hidden sm:inline">Edit</span> ✏️
+                </button>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">
+                  👤 Personal Info
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      First Name
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formData.firstName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Last Name
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formData.lastName}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Date of Birth
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formData.dateOfBirth}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Gender
+                    </span>
+                    <span className="font-semibold text-foreground capitalize">
+                      {formData.gender}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Nationality
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formData.nationality}
+                    </span>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Place of Birth
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formData.placeOfBirth}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Passport Details Card */}
+              <div className="bg-muted/30 border border-border rounded-xl p-5 relative group transition-all hover:border-primary/30 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="absolute top-4 right-4 text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <span className="hidden sm:inline">Edit</span> ✏️
+                </button>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">
+                  🛂 Passport Details
+                </h3>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Passport Number
+                    </span>
+                    <span className="font-semibold text-foreground uppercase">
+                      {formData.passportNumber}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Issue Date
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formData.passportIssueDate}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground block text-[11px] uppercase mb-0.5">
+                      Expiry Date
+                    </span>
+                    <span className="font-semibold text-foreground">
+                      {formData.passportExpiry}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Accommodation Card */}
+              <div className="bg-muted/30 border border-border rounded-xl p-5 relative group transition-all hover:border-primary/30 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  className="absolute top-4 right-4 text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <span className="hidden sm:inline">Edit</span> ✏️
+                </button>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">
+                  🏨 Accommodation
+                </h3>
+                <div className="text-sm">
+                  <div className="font-semibold text-foreground mb-1">
+                    {formData.hotelName}
+                  </div>
+                  <div className="text-muted-foreground text-xs leading-relaxed max-w-md">
+                    {formData.hotelAddress}
+                  </div>
+                </div>
+              </div>
+
+              {/* Documents Card */}
+              <div className="bg-muted/30 border border-border rounded-xl p-5 relative group transition-all hover:border-primary/30 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setStep(4)}
+                  className="absolute top-4 right-4 text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <span className="hidden sm:inline">Edit</span> ✏️
+                </button>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-4">
+                  📎 Documents
+                </h3>
+                <div className="flex flex-col gap-2.5">
+                  {documents && documents.length > 0 ? (
+                    documents.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center gap-2.5 text-sm"
+                      >
+                        <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                          <Check className="w-3 h-3 text-emerald-500" />
+                        </div>
+                        <span className="capitalize text-muted-foreground font-medium w-32">
+                          {doc.type.replace(/_/g, " ")}:
+                        </span>
+                        <span className="font-semibold text-foreground truncate">
+                          {doc.originalName}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="text-sm text-destructive font-medium">
+                      ⚠️ No documents uploaded!
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Declaration Checkbox */}
+              <div
+                className="mt-8 p-5 bg-primary/5 border border-primary/20 rounded-xl flex gap-3.5 items-start cursor-pointer hover:bg-primary/10 transition-colors"
+                onClick={() => setDeclarationChecked(!declarationChecked)}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1 w-4 h-4 rounded border-primary text-primary focus:ring-primary cursor-pointer"
+                  checked={declarationChecked}
+                  onChange={(e) => setDeclarationChecked(e.target.checked)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <label className="text-sm text-foreground leading-relaxed cursor-pointer font-medium">
+                  I declare that all the information provided above is true and
+                  accurate to the best of my knowledge. I understand that
+                  submitting false or misleading information may result in the
+                  immediate rejection of my e-Visa application.
+                </label>
               </div>
             </div>
           )}
@@ -1170,7 +1782,13 @@ export default function ApplicationForm() {
         {step < 5 ? (
           <button
             onClick={handleNext}
-            disabled={saving || (step === 1 && !isStep1Valid())}
+            disabled={Boolean(
+              saving ||
+                (step === 1 && !isStep1Valid()) ||
+                (step === 2 &&
+                  formData.passportExpiry &&
+                  new Date(formData.passportExpiry) <= new Date()),
+            )}
             className="flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-60"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -1180,8 +1798,8 @@ export default function ApplicationForm() {
         ) : (
           <button
             onClick={handleSubmit}
-            disabled={submitMutation.isPending || saving}
-            className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-60"
+            disabled={submitMutation.isPending || saving || !declarationChecked}
+            className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:bg-primary/90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {submitMutation.isPending ? (
               <>

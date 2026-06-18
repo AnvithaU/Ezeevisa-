@@ -1,76 +1,198 @@
+import axios from "axios";
 import { Router, IRouter } from "express";
-import OpenAI from "openai";
 import { requireAuth, type AuthRequest } from "../middlewares/auth";
+import { execSync, spawn } from "child_process";
+import path from "path";
+
+// ============================================================================
+// 🚀 MAGIC: AUTOMATICALLY START THE PYTHON SERVER IN THE BACKGROUND
+// ============================================================================
+try {
+  const ocrDir = path.join(process.cwd(), "artifacts/api-server/python-ocr");
+
+  console.log("🐍 Attempting to launch Python OCR Server...");
+  console.log("Current working directory:", process.cwd());
+  console.log("Node PATH:", process.env.PATH);
+
+  try {
+    const py = execSync("which python3").toString().trim();
+    console.log("Found python3:", py);
+  } catch (e) {
+    console.error("Could not find python3");
+  }
+
+  const pythonProcess = spawn("python3", ["-u", "app.py"], {
+    cwd: ocrDir,
+    env: {
+      ...process.env,
+      PYTHONPATH: `${process.cwd()}/.pythonlibs/lib/python3.11/site-packages:${process.env.PYTHONPATH || ""}`,
+    },
+  });
+
+  pythonProcess.stdout.on("data", (data) =>
+    console.log(`[Python]: ${data.toString().trim()}`),
+  );
+
+  pythonProcess.stderr.on("data", (data) =>
+    console.error(`[Python Log]: ${data.toString().trim()}`),
+  );
+
+  pythonProcess.on("error", (error) => {
+    console.error(`[Python Launch Error]:`, error.message);
+  });
+} catch (err) {
+  console.error("Could not setup Python process:", err);
+}
+
+// ============================================================================
+// ============================================================================
 
 const router: IRouter = Router();
 
-const openai = new OpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+router.post(
+  "/ocr/passport",
+  requireAuth,
+  async (req: AuthRequest, res): Promise<void> => {
+    const { files } = req.body;
+    console.log("OCR REQUEST RECEIVED");
 
-router.post("/ocr/passport", requireAuth, async (req: AuthRequest, res): Promise<void> => {
-  const { dataUrl } = req.body;
-
-  if (!dataUrl || 
-      !dataUrl.startsWith("data:image")) {
-    res.status(400).json({ error: "A valid image data URL is required" });
-    return;
-  }
-
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `You are a passport OCR system. Extract the following fields from this passport image and return ONLY a valid JSON object with these keys (use empty string "" if field is not visible or cannot be read):
-- firstName: Given name(s) as printed on passport
-- lastName: Surname/Family name as printed on passport
-- passportNumber: Passport document number (alphanumeric)
-- dateOfBirth: Date of birth in YYYY-MM-DD format
-- passportExpiry: Passport expiry/valid until date in YYYY-MM-DD format
-- gender: "male", "female", or "other"
-
-Return ONLY the JSON object, no explanation, no markdown.`,
-            },
-            {
-              type: "image_url",
-              image_url: { url: dataUrl, detail: "high" },
-            },
-          ],
-        },
-      ],
-      max_tokens: 300,
-    });
-
-    const content = completion.choices[0]?.message?.content?.trim() ?? "{}";
-
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    const jsonStr = jsonMatch ? jsonMatch[0] : "{}";
-
-    let extracted: Record<string, string> = {};
-    try {
-      extracted = JSON.parse(jsonStr);
-    } catch {
-      extracted = {};
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      res.status(400).json({
+        error: "At least one file is required",
+      });
+      return;
     }
 
-    res.json({
-      firstName: extracted.firstName ?? "",
-      lastName: extracted.lastName ?? "",
-      passportNumber: extracted.passportNumber ?? "",
-      dateOfBirth: extracted.dateOfBirth ?? "",
-      passportExpiry: extracted.passportExpiry ?? "",
-      gender: extracted.gender ?? "",
-    });
-  } catch (err: any) {
-    console.error("OCR error:", err);
-    res.status(500).json({ error: "Failed to process passport image" });
-  }
-});
+    if (files.length > 5) {
+      res.status(400).json({
+        error: "Maximum 5 files allowed",
+      });
+      return;
+    }
+
+    try {
+      // Validate each uploaded file
+      for (const file of files) {
+        // Must be a string image data URL
+        if (typeof file !== "string" || !file.startsWith("data:image/")) {
+          res.status(400).json({
+            error: "Invalid file format. Only image files are allowed.",
+          });
+          return;
+        }
+
+        // Extract base64 content safely
+        const base64Data = file.split(",")[1] || "";
+
+        // Reject malformed data URLs
+        if (!base64Data) {
+          res.status(400).json({
+            error: "Invalid image data",
+          });
+          return;
+        }
+
+        // Check file size (10MB max)
+        const sizeInBytes = Buffer.byteLength(base64Data, "base64");
+
+        if (sizeInBytes > 10 * 1024 * 1024) {
+          res.status(400).json({
+            error: "File exceeds 10MB limit",
+          });
+          return;
+        }
+      }
+
+      // Forward the request to your Python backend
+      const response = await axios.post(
+        "http://127.0.0.1:5001/extract-passport",
+        { files },
+      );
+
+      console.log("PYTHON OCR RESPONSE");
+      console.log(response.data);
+
+      let extracted = response.data;
+
+      const isValidDate = (value?: string) =>
+        !!value && /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+      try {
+        const confidence = Number(extracted.confidence ?? 0);
+
+        extracted.confidence = Number.isFinite(confidence)
+          ? confidence > 1
+            ? confidence / 100
+            : confidence
+          : 0;
+
+        if (!isValidDate(extracted.dateOfBirth)) extracted.dateOfBirth = "";
+        if (!isValidDate(extracted.passportExpiry))
+          extracted.passportExpiry = "";
+        if (!isValidDate(extracted.passportIssueDate))
+          extracted.passportIssueDate = "";
+
+        if (extracted.passportExpiry) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          const expiryDate = new Date(extracted.passportExpiry);
+          expiryDate.setHours(0, 0, 0, 0);
+
+          extracted.isExpired = expiryDate < today;
+        }
+
+        if (extracted.gender) {
+          const gender = extracted.gender.toLowerCase();
+
+          if (gender.startsWith("m")) extracted.gender = "male";
+          else if (gender.startsWith("f")) extracted.gender = "female";
+          else extracted.gender = "other";
+        }
+
+        const quality = extracted.documentQuality?.toLowerCase();
+        if (
+          quality !== "good" &&
+          quality !== "acceptable" &&
+          quality !== "poor"
+        ) {
+          extracted.documentQuality = "acceptable";
+        }
+      } catch {
+        extracted = {};
+      }
+
+      console.log({
+        passportNumber: "***",
+        firstName: extracted.firstName,
+      });
+
+      res.json({
+        firstName: extracted.firstName ?? "",
+        lastName: extracted.lastName ?? "",
+        passportNumber:
+          extracted.passportNumber?.replace(/\s/g, "").toUpperCase() ?? "",
+        dateOfBirth: extracted.dateOfBirth ?? "",
+        passportExpiry: extracted.passportExpiry ?? "",
+        passportIssueDate: extracted.passportIssueDate ?? "",
+        gender: extracted.gender ?? "",
+        nationality: extracted.nationality ?? "",
+        placeOfBirth: extracted.placeOfBirth ?? "",
+        mrzDetected: extracted.mrzDetected ?? false,
+        confidence: extracted.confidence ?? 0,
+        documentQuality: extracted.documentQuality ?? "good",
+        isExpired: extracted.isExpired ?? false,
+        isBlurry: extracted.isBlurry ?? false,
+        isCutOff: extracted.isCutOff ?? false,
+        hasGlare: extracted.hasGlare ?? false,
+        validationMessage:
+          extracted.validationMessage || "Passport image quality is acceptable",
+      });
+    } catch (err: any) {
+      console.error("OCR error:", err);
+      res.status(500).json({ error: "Failed to process passport image" });
+    }
+  },
+);
 
 export default router;

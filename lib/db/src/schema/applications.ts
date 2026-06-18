@@ -15,6 +15,7 @@ export const applicationsTable = pgTable("applications", {
   userId: integer("user_id")
     .notNull()
     .references(() => usersTable.id, { onDelete: "cascade" }),
+  groupId: text("group_id"),
   countryCode: text("country_code").notNull(),
   countryName: text("country_name").notNull(),
   countryFlag: text("country_flag").notNull(),

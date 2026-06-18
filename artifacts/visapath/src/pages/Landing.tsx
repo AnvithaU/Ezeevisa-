@@ -1,7 +1,6 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
 import { useGetVisaCountries } from "@workspace/api-client-react";
-import { useLocation } from "wouter";
 import WorldMap from "@/components/WorldMap/WorldMap";
 import {
   Globe,
@@ -14,7 +13,7 @@ import {
   Plane,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { isAuthenticated } from "@/lib/auth"; // adjust path if needed
+import { isAuthenticated } from "@/lib/auth";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
@@ -27,6 +26,33 @@ const stagger = {
       staggerChildren: 0.08,
     },
   },
+};
+
+// Image mappings for the photo cards
+// Image mappings for the photo cards
+const countryImages: Record<string, string> = {
+  Malaysia: "/countries/malaysia2.jpg",
+  Singapore: "/countries/singapore2.jpg",
+  "Sri Lanka": "/countries/srilanka2.jpg",
+  Thailand: "/countries/thailand2.jpg",
+  Turkey: "/countries/turkey2.jpg",
+  Vietnam: "/countries/vietnam2.jpg",
+  "United Arab Emirates": "/countries/uae2.jpg",
+};
+
+const countryDescriptions: Record<string, string> = {
+  Thailand: "Explore beaches, nightlife and temples.",
+  Vietnam: "Discover culture, food and scenic landscapes.",
+  Turkey: "Visit Istanbul and Cappadocia with ease.",
+  Egypt: "Experience the pyramids and ancient history.",
+  Kenya: "Enjoy wildlife safaris and nature adventures.",
+  Oman: "Explore deserts, mountains and rich heritage.",
+  Malaysia: "Modern cities and tropical islands await.",
+  Singapore: "A clean, futuristic city full of attractions.",
+  "Sri Lanka": "Beautiful beaches, tea estates and culture.",
+  Cambodia: "Visit Angkor Wat and stunning historical sites.",
+  "Indonesia (Bali)": "Relax in Bali's beaches and luxury resorts.",
+  "United Arab Emirates": "Experience Dubai and Abu Dhabi.",
 };
 
 export default function Landing() {
@@ -47,7 +73,6 @@ export default function Landing() {
 
   return (
     <div>
-      {/* Hero */}
       {/* Hero */}
       <section className="relative overflow-hidden bg-gradient-to-br from-primary/5 via-background to-accent/20 border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-20 md:py-28 lg:py-32">
@@ -144,6 +169,7 @@ export default function Landing() {
         <div className="absolute -right-24 top-0 w-96 h-96 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute right-32 bottom-0 w-64 h-64 bg-accent/30 rounded-full blur-2xl pointer-events-none" />
       </section>
+
       {/* Stats */}
       <section className="bg-primary py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
@@ -173,7 +199,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Featured Destinations */}
+      {/* Featured Destinations (Now using beautiful Photo Cards) */}
       <section className="py-16 md:py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <motion.div
@@ -205,7 +231,7 @@ export default function Landing() {
           </motion.div>
 
           <motion.div
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, margin: "-50px" }}
@@ -216,7 +242,6 @@ export default function Landing() {
                 <div
                   onClick={() => {
                     const target = `/apply/${country.code}`;
-
                     localStorage.setItem("selectedCountry", country.code);
 
                     if (!isAuthenticated()) {
@@ -226,42 +251,91 @@ export default function Landing() {
                       setLocation(target);
                     }
                   }}
+                  // Increased height to h-[380px], added rounded-2xl, and beautiful gold glow on hover
+                  className="relative group rounded-2xl overflow-hidden h-[380px] cursor-pointer shadow-lg border border-white/10 transition-all duration-500 hover:scale-[1.03] hover:-translate-y-2 hover:shadow-[0_0_30px_-5px_rgba(251,191,36,0.4)] hover:border-amber-400/60"
+                  style={{
+                    backgroundImage: `url(${countryImages[country.name] || ""})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }}
                 >
-                  <div className="flex items-start justify-between mb-4">
-                    <span className="text-4xl">{country.flag}</span>
-                    <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded-full">
-                      {country.continent}
-                    </span>
-                  </div>
-                  <h3 className="font-semibold text-foreground text-lg">
-                    {country.name}
-                  </h3>
-                  <div className="mt-3 space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">
-                        {country.processingDays} day
-                        {country.processingDays !== 1 ? "s" : ""} processing
+                  {/* OVERLAY */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/10 group-hover:from-black group-hover:via-black/60 transition-all duration-500" />
+
+                  {/* GOLD GLOW OVERLAY ON HOVER */}
+                  <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 bg-[radial-gradient(ellipse_at_bottom,_var(--tw-gradient-stops))] from-amber-500/20 via-transparent to-transparent pointer-events-none" />
+
+                  {/* CONTENT */}
+                  <div className="relative z-10 h-full p-5 flex flex-col justify-between text-white">
+                    {/* TOP */}
+                    <div className="flex items-start justify-between">
+                      <span className="text-4xl drop-shadow-md">
+                        {country.flag}
                       </span>
+
+                      <div className="absolute top-4 right-4 px-3 py-1 rounded-full bg-amber-400 text-black text-[11px] font-bold shadow-lg">
+                        ⭐ Featured
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Globe className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-muted-foreground">
-                        Stay up to {country.maxStay}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-                    <div>
-                      <span className="text-xs text-muted-foreground">
-                        From{" "}
-                      </span>
-                      <span className="text-base font-bold text-primary">
-                        {formatCurrency(country.fee)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1 text-xs font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                      Apply <ArrowRight className="w-3.5 h-3.5" />
+
+                    {/* BOTTOM */}
+                    <div className="relative">
+                      <h3 className="font-semibold text-2xl tracking-wide group-hover:text-amber-300 transition-colors duration-300">
+                        {country.name}
+                      </h3>
+
+                      <div className="mt-2 flex gap-2">
+                        <span className="px-2 py-1 rounded-full bg-green-500/20 text-green-300 text-[10px] font-medium border border-green-500/20 backdrop-blur-sm">
+                          Fast Approval
+                        </span>
+
+                        <span className="px-2 py-1 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-medium border border-blue-500/20 backdrop-blur-sm">
+                          e-Visa
+                        </span>
+                      </div>
+
+                      {/* NON-HOVER STATE */}
+                      <div className="group-hover:hidden transition-all duration-300">
+                        <div className="mt-3 text-sm opacity-80 font-medium">
+                          {country.processingDays} day
+                          {country.processingDays !== 1 ? "s" : ""} processing
+                        </div>
+
+                        <div className="mt-1 text-sm opacity-80 font-medium">
+                          Stay up to {country.maxStay}
+                        </div>
+
+                        <div
+                          className="mt-3 text-xl font-bold text-amber-300"
+                          style={{ textShadow: "0 2px 10px rgba(0,0,0,0.8)" }}
+                        >
+                          {formatCurrency(country.fee)}
+                        </div>
+                      </div>
+
+                      {/* HOVER CONTENT (Only visible when hovering) */}
+                      <div className="hidden group-hover:block mt-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                        <p className="text-sm text-white/90 leading-relaxed font-medium">
+                          {countryDescriptions[country.name] ||
+                            `Apply for your ${country.name} e-Visa quickly and securely.`}
+                        </p>
+
+                        <div className="mt-4 pt-4 border-t border-white/20">
+                          <div className="flex items-center justify-between">
+                            <div className="text-xl font-bold text-amber-300">
+                              {formatCurrency(country.fee)}
+                            </div>
+                            <div className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider">
+                              {country.continent}
+                            </div>
+                          </div>
+
+                          <div className="mt-4 inline-flex w-full justify-center items-center gap-2 px-4 py-2.5 rounded-lg bg-amber-400 text-black text-sm font-bold shadow-[0_0_15px_rgba(251,191,36,0.5)] hover:bg-amber-300 transition-all duration-300">
+                            Start Application
+                            <ArrowRight className="w-4 h-4" />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

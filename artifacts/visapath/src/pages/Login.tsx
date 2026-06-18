@@ -106,7 +106,7 @@ export default function Login() {
         localStorage.removeItem("redirectAfterLogin");
         setLocation(redirect);
       } else {
-        setLocation("/dashboard");
+        setLocation("/apply");
       }
     } catch (err: any) {
       setError(err?.data?.error || "Google sign-in failed. Please try again.");

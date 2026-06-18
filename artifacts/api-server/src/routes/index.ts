@@ -6,6 +6,8 @@ import applicationsRouter from "./applications";
 import documentsRouter from "./documents";
 import dashboardRouter from "./dashboard";
 import ocrRouter from "./ocr";
+import contactRouter from "./contact";
+import reviewsRouter from "./reviews";
 
 const router: IRouter = Router();
 
@@ -16,5 +18,7 @@ router.use(applicationsRouter);
 router.use(documentsRouter);
 router.use(dashboardRouter);
 router.use(ocrRouter);
+router.use(contactRouter);
+router.use(reviewsRouter);
 
 export default router;

@@ -85,21 +85,28 @@ router.post(
       return;
     }
 
-    const [app] = await db
-      .insert(applicationsTable)
-      .values({
-        userId: req.userId!,
-        countryCode: country.code,
-        countryName: country.name,
-        countryFlag: country.flag,
-        visaType: visaType.type,
-        status: "draft",
-        travelDate: parsed.data.travelDate ?? null,
-        returnDate: parsed.data.returnDate ?? null,
-        purpose: parsed.data.purpose ?? null,
-        fee: visaType.fee,
-      })
-      .returning();
+    let app;
+    try {
+      [app] = await db
+        .insert(applicationsTable)
+        .values({
+          userId: req.userId!,
+          countryCode: country.code,
+          countryName: country.name,
+          countryFlag: country.flag,
+          visaType: visaType.type,
+          status: "draft",
+          travelDate: parsed.data.travelDate ?? null,
+          returnDate: parsed.data.returnDate ?? null,
+          purpose: parsed.data.purpose ?? null,
+          fee: visaType.fee,
+        })
+        .returning();
+      console.log("APP CREATED", app);
+    } catch (err) {
+      console.error("DB ERROR FULL:", err);
+      throw err;
+    }
 
     await db.insert(activityTable).values({
       userId: req.userId!,
@@ -304,6 +311,7 @@ router.post(
 function formatApp(app: typeof applicationsTable.$inferSelect) {
   return {
     id: app.id,
+    groupId: (app as any).groupId,
     userId: app.userId,
     countryCode: app.countryCode,
     countryName: app.countryName,
@@ -334,5 +342,141 @@ function formatApp(app: typeof applicationsTable.$inferSelect) {
     updatedAt: app.updatedAt.toISOString(),
   };
 }
+// --- NEW GROUP APPLICATION ROUTES ---
 
+router.post(
+  "/applications/group",
+  requireAuth,
+  async (req: AuthRequest, res): Promise<void> => {
+    const { countryCode, visaType, count } = req.body;
+
+    // Manual validation so you don't have to update Zod schemas right now
+    if (!countryCode || !visaType || !count || count < 1 || count > 10) {
+      res
+        .status(400)
+        .json({ error: "Invalid parameters. Count must be 1-10." });
+      return;
+    }
+
+    const country = getCountryByCode(countryCode);
+    if (!country) {
+      res.status(400).json({ error: "Invalid country code" });
+      return;
+    }
+
+    const vt = country.visaTypes.find((v) => v.type === visaType);
+    if (!vt) {
+      res.status(400).json({ error: "Invalid visa type for this country" });
+      return;
+    }
+
+    // Generate a unique ID for this trip
+    const groupId = `grp_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
+    try {
+      // Create 'X' amount of applications instantly in the database
+      const appsToInsert = Array.from({ length: count }).map(() => ({
+        userId: req.userId!,
+        countryCode: country.code,
+        countryName: country.name,
+        countryFlag: country.flag,
+        visaType: vt.type,
+        status: "draft",
+        fee: vt.fee,
+        groupId: groupId,
+      }));
+
+      const createdApps = await db
+        .insert(applicationsTable)
+        .values(appsToInsert as any)
+        .returning();
+
+      await db.insert(activityTable).values({
+        userId: req.userId!,
+        type: "application_created",
+        applicationId: createdApps[0].id,
+        countryName: country.name,
+        countryFlag: country.flag,
+        description: `Started a group application for ${count} people to ${country.name}`,
+      });
+
+      res
+        .status(201)
+        .json({ groupId, applications: createdApps.map(formatApp) });
+    } catch (err) {
+      console.error("DB ERROR FULL:", err);
+      res.status(500).json({ error: "Failed to create group applications" });
+    }
+  },
+);
+
+router.get(
+  "/applications/group/:groupId",
+  requireAuth,
+  async (req: AuthRequest, res): Promise<void> => {
+    const { groupId } = req.params;
+
+    const apps = await db
+      .select()
+      .from(applicationsTable)
+      .where(
+        and(
+          eq(applicationsTable.groupId as any, groupId),
+          eq(applicationsTable.userId, req.userId!),
+        ),
+      )
+      .orderBy(applicationsTable.id);
+
+    if (!apps || apps.length === 0) {
+      res.status(404).json({ error: "Group not found" });
+      return;
+    }
+
+    res.json({ applications: apps.map(formatApp) });
+  },
+);
+
+router.post(
+  "/applications/group/:groupId/submit",
+  requireAuth,
+  async (req: AuthRequest, res): Promise<void> => {
+    const { groupId } = req.params;
+
+    try {
+      const updatedApps = await db
+        .update(applicationsTable)
+        .set({
+          status: "submitted",
+          submittedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(applicationsTable.groupId as any, groupId),
+            eq(applicationsTable.userId, req.userId!),
+          ),
+        )
+        .returning();
+
+      if (!updatedApps.length) {
+        res.status(404).json({ error: "Group not found" });
+        return;
+      }
+
+      await db.insert(activityTable).values({
+        userId: req.userId!,
+        type: "application_submitted",
+        applicationId: updatedApps[0].id,
+        countryName: updatedApps[0].countryName,
+        countryFlag: updatedApps[0].countryFlag,
+        description: `Submitted group application for ${updatedApps.length} travelers to ${updatedApps[0].countryName}`,
+      });
+
+      res.json({ message: "Successfully submitted" });
+    } catch (err) {
+      console.error("Group Submit Error:", err);
+      res.status(500).json({ error: "Failed to submit group applications" });
+    }
+  },
+);
 export default router;

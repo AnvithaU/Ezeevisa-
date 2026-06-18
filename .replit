@@ -1,4 +1,5 @@
-modules = ["nodejs-24", "postgresql-16"]
+run = "pnpm dev"
+modules = ["nodejs-24", "postgresql-16", "python-3.11"]
 
 [deployment]
 router = "application"
@@ -11,10 +12,6 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
-[agent]
-stack = "PNPM_WORKSPACE"
-expertMode = true
-
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
@@ -22,6 +19,10 @@ timeoutMs = 20000
 [[ports]]
 localPort = 3000
 externalPort = 6000
+
+[[ports]]
+localPort = 5001
+externalPort = 8081
 
 [[ports]]
 localPort = 5173
@@ -73,4 +74,7 @@ externalPort = 5000
 
 [nix]
 channel = "stable-25_05"
-packages = ["lsof"]
+packages = ["glib", "libGL", "lsof", "tesseract"]
+
+[agent]
+expertMode = true

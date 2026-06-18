@@ -1,13 +1,33 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { useListApplications, getListApplicationsQueryKey } from "@workspace/api-client-react";
+import {
+  useListApplications,
+  getListApplicationsQueryKey,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import StatusBadge from "@/components/StatusBadge";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { FileText, Plus, Clock, ArrowRight, Globe, Loader2 } from "lucide-react";
+import {
+  FileText,
+  Plus,
+  Clock,
+  ArrowRight,
+  Globe,
+  Loader2,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { customFetch } from "@/lib/customFetch";
 
-type StatusFilter = "all" | "draft" | "submitted" | "under_review" | "approved" | "rejected";
+type StatusFilter =
+  | "all"
+  | "draft"
+  | "submitted"
+  | "under_review"
+  | "approved"
+  | "rejected";
 
 const STATUS_TABS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
@@ -20,13 +40,73 @@ const STATUS_TABS: { value: StatusFilter; label: string }[] = [
 
 export default function Applications() {
   const [activeStatus, setActiveStatus] = useState<StatusFilter>("all");
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useListApplications(
     { status: activeStatus, limit: 50 },
-    { query: { queryKey: getListApplicationsQueryKey({ status: activeStatus }) } }
+    {
+      query: {
+        queryKey: getListApplicationsQueryKey({ status: activeStatus }),
+      },
+    },
   );
 
   const apps = data?.applications ?? [];
+
+  // --- NEW GROUPING LOGIC ---
+  const groupedApps = apps.reduce(
+    (acc, app: any) => {
+      if (app.groupId) {
+        if (!acc[app.groupId]) {
+          acc[app.groupId] = {
+            isGroup: true,
+            id: app.groupId,
+            groupId: app.groupId,
+            countryFlag: app.countryFlag,
+            countryName: app.countryName,
+            visaType: app.visaType,
+            status: app.status,
+            createdAt: app.createdAt,
+            totalFee: 0,
+            applications: [],
+          };
+        }
+        acc[app.groupId].totalFee += Number(app.fee);
+        acc[app.groupId].applications.push(app);
+      } else {
+        // It's a single independent app
+        acc[`single_${app.id}`] = {
+          isGroup: false,
+          ...app,
+        };
+      }
+      return acc;
+    },
+    {} as Record<string, any>,
+  );
+
+  // Convert the object back into an array and sort by newest first
+  const displayItems = Object.values(groupedApps).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  const handleDeleteDraft = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm("Are you sure you want to delete this draft?")) return;
+
+    try {
+      await customFetch(`/api/applications/${id}`, {
+        method: "DELETE",
+      });
+      queryClient.invalidateQueries({
+        queryKey: getListApplicationsQueryKey({ status: activeStatus }),
+      });
+    } catch (error) {
+      alert("Failed to delete draft. Please try again.");
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
@@ -37,7 +117,9 @@ export default function Applications() {
         animate={{ opacity: 1, y: 0 }}
       >
         <div>
-          <h1 className="text-2xl font-bold text-foreground">My Applications</h1>
+          <h1 className="text-2xl font-bold text-foreground">
+            My Applications
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Track and manage all your visa applications
           </p>
@@ -60,7 +142,7 @@ export default function Applications() {
               "px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all",
               activeStatus === tab.value
                 ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted",
             )}
           >
             {tab.label}
@@ -73,7 +155,7 @@ export default function Applications() {
         <div className="flex items-center justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
-      ) : apps.length === 0 ? (
+      ) : displayItems.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
             <Globe className="w-7 h-7 text-muted-foreground" />
@@ -98,46 +180,120 @@ export default function Applications() {
           animate={{ opacity: 1 }}
           transition={{ duration: 0.2 }}
         >
-          {apps.map((app) => (
-            <Link key={app.id} href={`/applications/${app.id}`}>
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-4 p-5 bg-card border border-border rounded-xl hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group"
-              >
-                <span className="text-3xl flex-shrink-0">{app.countryFlag}</span>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <p className="font-semibold text-foreground">{app.countryName}</p>
-                    <StatusBadge status={app.status} />
-                    {app.referenceNumber && (
-                      <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                        {app.referenceNumber}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {app.visaType.replace(/_/g, " ")}
-                  </p>
-                  <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5" />
-                      Created {formatDate(app.createdAt)}
+          {displayItems.map((item) => {
+            // --- IF IT IS A GROUP ---
+            if (item.isGroup) {
+              return (
+                <Link key={item.id} href={`/apply/group/${item.groupId}`}>
+                  <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center gap-4 p-5 bg-emerald-500/5 border border-emerald-500/20 rounded-xl hover:border-emerald-500/40 hover:shadow-sm transition-all cursor-pointer group"
+                  >
+                    <span className="text-3xl flex-shrink-0">
+                      {item.countryFlag}
                     </span>
-                    {app.travelDate && (
-                      <span>Travel: {formatDate(app.travelDate)}</span>
-                    )}
-                  </div>
-                </div>
 
-                <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                  <p className="font-bold text-primary">{formatCurrency(app.fee)}</p>
-                  <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-              </motion.div>
-            </Link>
-          ))}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <p className="font-semibold text-foreground">
+                          {item.countryName}
+                        </p>
+                        <span className="text-xs font-semibold bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          Group Trip ({item.applications.length} Travelers)
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {item.visaType.replace(/_/g, " ")}
+                      </p>
+                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5" />
+                          Created {formatDate(item.createdAt)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                      <p className="font-bold text-emerald-600">
+                        {formatCurrency(item.totalFee)}
+                      </p>
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-emerald-600/80 mr-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          View Group
+                        </span>
+                        <ArrowRight className="w-4 h-4 text-emerald-600/60 group-hover:text-emerald-600 transition-colors" />
+                      </div>
+                    </div>
+                  </motion.div>
+                </Link>
+              );
+            }
+
+            // --- IF IT IS A SINGLE APPLICATION ---
+            const app = item;
+            return (
+              <Link key={app.id} href={`/applications/${app.id}`}>
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-4 p-5 bg-card border border-border rounded-xl hover:border-primary/30 hover:shadow-sm transition-all cursor-pointer group"
+                >
+                  <span className="text-3xl flex-shrink-0">
+                    {app.countryFlag}
+                  </span>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <p className="font-semibold text-foreground">
+                        {app.countryName}
+                      </p>
+                      <StatusBadge status={app.status} />
+                      {app.referenceNumber && (
+                        <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                          {app.referenceNumber}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {app.visaType.replace(/_/g, " ")}
+                    </p>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5" />
+                        Created {formatDate(app.createdAt)}
+                      </span>
+                      {app.travelDate && (
+                        <span>Travel: {formatDate(app.travelDate)}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <p className="font-bold text-primary">
+                      {formatCurrency(app.fee)}
+                    </p>
+
+                    <div className="flex items-center gap-2">
+                      {/* ONLY SHOW TRASH CAN IF IT IS A DRAFT */}
+                      {app.status === "draft" && (
+                        <button
+                          onClick={(e) => handleDeleteDraft(e, app.id)}
+                          className="p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors"
+                          title="Delete Draft"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                  </div>
+                </motion.div>
+              </Link>
+            );
+          })}
         </motion.div>
       )}
     </div>

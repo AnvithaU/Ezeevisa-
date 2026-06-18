@@ -13,10 +13,10 @@ const CONTINENTS = ["All", "Asia", "Europe", "Africa"];
 
 export default function ApplyCountries() {
   const { data: countries, isLoading } = useGetVisaCountries();
-  console.log(countries);
   const [search, setSearch] = useState("");
   const [continent, setContinent] = useState("All");
   const [, setLocation] = useLocation();
+
   const countryImages: Record<string, string> = {
     "Indonesia (Bali)": "/countries/Bali.jpg",
     Cambodia: "/countries/cambodia.jpg",
@@ -31,6 +31,7 @@ export default function ApplyCountries() {
     Vietnam: "/countries/Vietnam.jpg",
     "United Arab Emirates": "/countries/UAE.jpg",
   };
+
   const countryDescriptions: Record<string, string> = {
     Thailand: "Explore beaches, nightlife and temples.",
     Vietnam: "Discover culture, food and scenic landscapes.",
@@ -180,10 +181,10 @@ export default function ApplyCountries() {
                     setLocation(target);
                   }
                 }}
-                className="relative group rounded-xl overflow-hidden h-72 cursor-pointer shadow-md hover:shadow-2xl border border-white/10 transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1"
+                // Changed from h-72 to h-[22rem] here to prevent content clipping
+                className="relative group rounded-xl overflow-hidden h-[22rem] cursor-pointer shadow-md hover:shadow-2xl border border-white/10 transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1"
                 style={{
                   backgroundImage: `url(${countryImages[country.name] || ""})`,
-
                   backgroundSize: "cover",
                   backgroundPosition: "center",
                 }}
@@ -257,7 +258,8 @@ export default function ApplyCountries() {
                         Stay up to {country.maxStay}
                       </div>
                       <div className="mt-4">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-300/40 bg-black/30 backdrop-blur-md text-amber-300 text-sm font-semibold shadow-lgtransition-all duration-300 group-hover:bg-amber-300/10">
+                        {/* Fixed the typo in class (shadow-lgtransition-all -> shadow-lg transition-all) */}
+                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-amber-300/40 bg-black/30 backdrop-blur-md text-amber-300 text-sm font-semibold shadow-lg transition-all duration-300 group-hover:bg-amber-300/10">
                           Start Application
                           <span className="transition-transform group-hover:translate-x-1">
                             →

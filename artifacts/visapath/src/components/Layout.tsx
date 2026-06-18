@@ -6,6 +6,8 @@ import {
   LayoutDashboard,
   FileText,
   Globe,
+  Star,
+  Phone,
   LogOut,
   Menu,
   X,
@@ -21,14 +23,25 @@ interface LayoutProps {
 /* ✅ FIXED + SLIGHTLY ANIMATED BRAND (ONLY CHANGE) */
 function Brand({ size = "md" }: { size?: "sm" | "md" }) {
   return (
-    <img
-      src="/logo/EzeVisa%20Logo.png"
-      alt="EzeVisas"
-      className={cn(
-        size === "sm" ? "h-12 w-auto" : "h-16 w-auto",
-        "transition-all duration-300 ease-out hover:scale-105 hover:-translate-y-0.5 hover:drop-shadow-md",
-      )}
-    />
+    <div className="flex items-center gap-2 md:gap-3 transition-all duration-300 ease-out hover:scale-[1.02] hover:-translate-y-0.5 hover:drop-shadow-sm group">
+      <img
+        src="/logo/EzeVisa%20Logo.png"
+        alt="EzeVisas"
+        className={cn(
+          size === "sm" ? "h-9 w-auto" : "h-10 md:h-12 w-auto",
+          "transition-transform duration-300 group-hover:scale-105",
+        )}
+      />
+      <span
+        className={cn(
+          "font-serif font-semibold tracking-wide",
+          size === "sm" ? "text-xl" : "text-2xl md:text-[28px]",
+        )}
+      >
+        <span className="text-foreground">Eze</span>
+        <span className="text-gold-gradient">Visa</span>
+      </span>
+    </div>
   );
 }
 
@@ -43,6 +56,8 @@ export default function Layout({ children }: LayoutProps) {
         { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
         { href: "/applications", label: "My Applications", icon: FileText },
         { href: "/apply", label: "Apply Now", icon: Globe },
+        { href: "/reviews", label: "Reviews", icon: Star },
+        { href: "/contact", label: "Contact Us", icon: Phone },
       ]
     : [];
 
