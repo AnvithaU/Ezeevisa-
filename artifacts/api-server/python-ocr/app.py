@@ -24,7 +24,7 @@ logger = logging.getLogger("passport_ocr")
 # ==========================================
 # PASTE YOUR OCR.SPACE API KEY HERE
 # ==========================================
-OCR_SPACE_API_KEY = "K81951176088957"
+OCR_SPACE_API_KEY = os.getenv("OCR_SPACE_API_KEY", "")
 
 # ---------------------------------------------------------------------------
 # Tunables
