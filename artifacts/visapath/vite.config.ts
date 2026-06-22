@@ -5,7 +5,6 @@ import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 const port = Number(process.env.PORT || 5173);
-
 const basePath = process.env.BASE_PATH || "/";
 
 export default defineConfig({
@@ -28,6 +27,10 @@ export default defineConfig({
         ]
       : []),
   ],
+  // THIS IS THE MAGIC FIX THAT STOPS THE CRASH:
+  optimizeDeps: {
+    exclude: ["@imgly/background-removal"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),

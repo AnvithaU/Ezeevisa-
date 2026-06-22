@@ -3,6 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEffect } from "react";
 import { VISA_REQUIREMENTS } from "@/lib/visaRequirements";
+import VisaPhotoStep from "@/components/VisaPhotoStep";
 import {
   useGetApplication,
   useUpdateApplication,
@@ -54,9 +55,10 @@ type FormData = {
 const STEPS = [
   { id: 1, label: "Travel Details" },
   { id: 2, label: "Personal Info" },
-  { id: 3, label: "Accommodation" },
-  { id: 4, label: "Documents" },
-  { id: 5, label: "Review" },
+  { id: 3, label: "Visa Photo" },
+  { id: 4, label: "Accommodation" },
+  { id: 5, label: "Documents" },
+  { id: 6, label: "Review" },
 ];
 
 export default function ApplicationForm() {
@@ -74,6 +76,8 @@ export default function ApplicationForm() {
   const [showScanner, setShowScanner] = useState(false);
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
+  const [visaPhotoFile, setVisaPhotoFile] = useState<File | null>(null);
+  const [linkedDocs, setLinkedDocs] = useState<string[]>([]);
   const [declarationChecked, setDeclarationChecked] = useState(false);
   const [showReviewScreen, setShowReviewScreen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -506,34 +510,46 @@ export default function ApplicationForm() {
       setSaving(false);
     }
   };
+
   const handleNext = async () => {
     setError(null);
     if (step === 1 && !isStep1Valid()) {
       setError("Please complete Travel Details correctly before continuing.");
       return;
     }
-
     if (step === 2 && !validateStep2()) {
       setError(
         "Please complete Personal Information correctly before continuing.",
       );
       return;
     }
-    if (step === 3 && !validateStep3()) {
+    // NEW STEP 3 VALIDATION
+    if (step === 3 && !visaPhotoFile) {
+      setError(
+        "Please capture and validate your visa photo before continuing.",
+      );
+      return;
+    }
+    // PREVIOUS STEP 3 IS NOW STEP 4
+    if (step === 4 && !validateStep3()) {
       setError("Please complete Accommodation Details before continuing.");
       return;
     }
-    if (step === 4) {
+    // PREVIOUS STEP 4 IS NOW STEP 5
+    if (step === 5) {
       const requiredDocs = [
         "passport_front",
         "passport_back",
-        ...docTypes.filter((d) => d.required).map((d) => d.type),
+        ...docTypes
+          .filter((d) => d.required && d.type !== "photo")
+          .map((d) => d.type),
       ];
+
       console.log("STEP 4 VALIDATION RUNNING");
       console.log(documents);
-
-      const hasRequiredDocs = requiredDocs.every((type) =>
-        documents?.some((d) => d.type === type),
+      const hasRequiredDocs = requiredDocs.every(
+        (type) =>
+          documents?.some((d) => d.type === type) || linkedDocs.includes(type),
       );
 
       if (!hasRequiredDocs) {
@@ -559,8 +575,9 @@ export default function ApplicationForm() {
       "passport_back",
       ...docTypes.filter((d) => d.required).map((d) => d.type),
     ];
-    const hasRequiredDocs = requiredDocs.every((type) =>
-      documents?.some((d) => d.type === type),
+    const hasRequiredDocs = requiredDocs.every(
+      (type) =>
+        documents?.some((d) => d.type === type) || linkedDocs.includes(type),
     );
 
     if (!hasRequiredDocs) {
@@ -632,6 +649,72 @@ export default function ApplicationForm() {
       );
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleLinkPrimaryDocument = async (docType: string) => {
+    try {
+      if (!groupData?.applications?.[0]?.id) {
+        setError("Could not find primary applicant.");
+        return;
+      }
+      const primaryAppId = groupData.applications[0].id;
+
+      setUploadingType(docType); // Show the loading spinner
+
+      // 1. Fetch the primary applicant's document list
+      const docsResponse = await customFetch<any[]>(
+        `/api/applications/${primaryAppId}/documents`,
+      );
+      const primaryDoc = docsResponse.find((d) => d.type === docType);
+
+      if (!primaryDoc) {
+        setError(
+          `The primary applicant has not uploaded a ${docType.replace(/_/g, " ")} yet!`,
+        );
+        setUploadingType(null);
+        return;
+      }
+
+      // 2. Download the actual file from your server
+      const fileResponse = await fetch(primaryDoc.url);
+      const blob = await fileResponse.blob();
+
+      // 3. Convert it and upload it to the current traveler!
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+
+        uploadMutation.mutate(
+          {
+            id: appId,
+            data: {
+              type: docType,
+              filename: primaryDoc.filename,
+              originalName: primaryDoc.originalName,
+              mimeType: primaryDoc.mimeType,
+              size: primaryDoc.size,
+              dataUrl,
+            },
+          },
+          {
+            onSuccess: () => {
+              queryClient.invalidateQueries({
+                queryKey: getListApplicationDocumentsQueryKey(appId),
+              });
+              setUploadingType(null);
+            },
+            onError: () => {
+              setError("Failed to copy document.");
+              setUploadingType(null);
+            },
+          },
+        );
+      };
+      reader.readAsDataURL(blob);
+    } catch (err) {
+      setError("Failed to fetch primary document.");
+      setUploadingType(null);
+    }
   };
 
   const handleDeleteDoc = (docId: number) => {
@@ -1358,11 +1441,52 @@ export default function ApplicationForm() {
             </div>
           )}
 
+          {/* ----- NEW STEP 3: VISA PHOTO ----- */}
           {step === 3 && (
+            <div className="space-y-5">
+              <h2 className="font-semibold text-foreground text-lg">
+                Visa Photo Capture
+              </h2>
+              <VisaPhotoStep
+                onComplete={(file) => {
+                  setVisaPhotoFile(file);
+                  handleFileUpload("photo", file);
+                }}
+              />
+              {visaPhotoFile && (
+                <div className="p-4 bg-emerald-500/10 text-emerald-600 rounded-xl flex items-center justify-center gap-2 font-bold mt-4 border border-emerald-500/20">
+                  <Check className="w-5 h-5" />
+                  Photo successfully captured and validated!
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ----- NEW STEP 4: ACCOMMODATION ----- */}
+          {step === 4 && (
             <div className="space-y-5">
               <h2 className="font-semibold text-foreground text-lg">
                 Accommodation Details
               </h2>
+
+              {/* 🌟 FAMILY INHERITANCE: AUTOFILL BUTTON 🌟 */}
+              {travelerIndex > 1 && groupData?.applications?.[0] && (
+                <motion.button
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  type="button"
+                  onClick={() => {
+                    const primary = groupData.applications[0];
+                    handleUpdate("hotelName", primary.hotelName || "");
+                    handleUpdate("hotelAddress", primary.hotelAddress || "");
+                  }}
+                  className="mb-2 w-full flex items-center justify-center gap-2 px-4 py-3 bg-primary/10 border border-primary/20 text-primary font-bold rounded-xl hover:bg-primary/20 transition-all shadow-sm"
+                >
+                  <Sparkles className="w-5 h-5" />
+                  Autofill Accommodation from Primary Applicant
+                </motion.button>
+              )}
+
               <p className="text-sm text-muted-foreground">
                 Provide your confirmed accommodation details for the destination
                 country.
@@ -1413,7 +1537,8 @@ export default function ApplicationForm() {
             </div>
           )}
 
-          {step === 4 && (
+          {/* ----- NEW STEP 5: DOCUMENTS ----- */}
+          {step === 5 && (
             <div className="space-y-5">
               <h2 className="font-semibold text-foreground text-lg">
                 Upload Documents
@@ -1431,7 +1556,7 @@ export default function ApplicationForm() {
                   return (
                     <div
                       key={docType.type}
-                      className="flex items-center gap-4 p-4 bg-muted/30 border border-border rounded-xl"
+                      className="flex items-center gap-4 p-4 bg-muted/30 border border-border rounded-xl flex-wrap sm:flex-nowrap"
                     >
                       <div className="w-9 h-9 rounded-lg bg-card border border-border flex items-center justify-center flex-shrink-0">
                         <FileText className="w-4.5 h-4.5 text-muted-foreground" />
@@ -1447,47 +1572,84 @@ export default function ApplicationForm() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground mb-1">
                           {docType.desc}
                         </p>
                         {uploaded && (
-                          <p className="text-xs text-primary mt-1">
-                            {uploaded.originalName}
+                          <p className="text-xs text-primary mt-1 font-medium">
+                            ✓ {uploaded.originalName}
                           </p>
                         )}
-                      </div>
-                      {uploaded ? (
-                        <button
-                          onClick={() => handleDeleteDoc(uploaded.id)}
-                          className="flex items-center gap-1.5 text-xs text-destructive hover:underline"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                          Remove
-                        </button>
-                      ) : (
-                        <button
-                          disabled={uploadingType === docType.type}
-                          onClick={() => {
-                            const input = document.createElement("input");
-                            input.type = "file";
-                            input.accept = ".jpg,.jpeg,.png";
-                            input.onchange = (e) => {
-                              const file = (e.target as HTMLInputElement)
-                                .files?.[0];
-                              if (file) handleFileUpload(docType.type, file);
-                            };
-                            input.click();
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-medium rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-60"
-                        >
-                          {uploadingType === docType.type ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Upload className="w-3.5 h-3.5" />
+
+                        {/* 🌟 NEW: FAMILY INHERITANCE BUTTON FOR DOCUMENTS 🌟 */}
+                        {travelerIndex > 1 &&
+                          docType.type !== "photo" &&
+                          !uploaded && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleLinkPrimaryDocument(docType.type)
+                              }
+                              className={cn(
+                                "mt-2 text-[11px] font-semibold flex items-center gap-1.5 transition-colors p-1.5 rounded-md border inline-flex",
+                                linkedDocs.includes(docType.type)
+                                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600"
+                                  : "bg-background border-border text-primary hover:bg-muted",
+                              )}
+                            >
+                              {linkedDocs.includes(docType.type) ? (
+                                <>
+                                  <Check className="w-3 h-3" /> Linked to
+                                  Primary
+                                </>
+                              ) : (
+                                <>
+                                  <Sparkles className="w-3 h-3" /> Use Primary
+                                  Applicant's File
+                                </>
+                              )}
+                            </button>
                           )}
-                          Upload
-                        </button>
-                      )}
+                      </div>
+                      {/* UPLOAD / REMOVE BUTTONS */}
+                      <div className="flex-shrink-0 ml-auto">
+                        {uploaded ? (
+                          <button
+                            onClick={() => handleDeleteDoc(uploaded.id)}
+                            className="flex items-center gap-1.5 text-xs text-destructive hover:underline"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                            Remove
+                          </button>
+                        ) : linkedDocs.includes(docType.type) ? (
+                          <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
+                            <Check className="w-4 h-4" /> Done
+                          </span>
+                        ) : (
+                          <button
+                            disabled={uploadingType === docType.type}
+                            onClick={() => {
+                              const input = document.createElement("input");
+                              input.type = "file";
+                              input.accept = ".jpg,.jpeg,.png";
+                              input.onchange = (e) => {
+                                const file = (e.target as HTMLInputElement)
+                                  .files?.[0];
+                                if (file) handleFileUpload(docType.type, file);
+                              };
+                              input.click();
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary text-xs font-medium rounded-lg hover:bg-primary/20 transition-colors disabled:opacity-60"
+                          >
+                            {uploadingType === docType.type ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Upload className="w-3.5 h-3.5" />
+                            )}
+                            Upload
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -1495,7 +1657,8 @@ export default function ApplicationForm() {
             </div>
           )}
 
-          {step === 5 && (
+          {/* ----- NEW STEP 6: REVIEW ----- */}
+          {step === 6 && (
             <div className="space-y-6">
               <div className="text-center mb-6">
                 <h2 className="text-2xl font-bold text-foreground">
@@ -1688,7 +1851,7 @@ export default function ApplicationForm() {
               <div className="bg-muted/30 border border-border rounded-xl p-5 relative group transition-all hover:border-primary/30 shadow-sm">
                 <button
                   type="button"
-                  onClick={() => setStep(3)}
+                  onClick={() => setStep(4)}
                   className="absolute top-4 right-4 text-xs font-bold text-primary hover:underline flex items-center gap-1"
                 >
                   <span className="hidden sm:inline">Edit</span> ✏️
@@ -1710,7 +1873,7 @@ export default function ApplicationForm() {
               <div className="bg-muted/30 border border-border rounded-xl p-5 relative group transition-all hover:border-primary/30 shadow-sm">
                 <button
                   type="button"
-                  onClick={() => setStep(4)}
+                  onClick={() => setStep(5)}
                   className="absolute top-4 right-4 text-xs font-bold text-primary hover:underline flex items-center gap-1"
                 >
                   <span className="hidden sm:inline">Edit</span> ✏️
@@ -1779,7 +1942,7 @@ export default function ApplicationForm() {
           Back
         </button>
 
-        {step < 5 ? (
+        {step < 6 ? (
           <button
             onClick={handleNext}
             disabled={Boolean(
