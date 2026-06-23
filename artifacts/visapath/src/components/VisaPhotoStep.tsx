@@ -12,8 +12,6 @@ import {
   Check,
 } from "lucide-react";
 import { FilesetResolver, FaceLandmarker } from "@mediapipe/tasks-vision";
-import { detectGlassesSafe } from "./glassesDetection";
-import { detectPossibleHat } from "./hatDetection";
 import { removeBackground } from "@imgly/background-removal";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -30,21 +28,26 @@ interface ValidationResult {
     eyesOpen: boolean;
     neutralExpression: boolean;
     notBlurry: boolean;
+    brightnessGood: boolean;
+    backgroundUniform: boolean;
+    backgroundClean: boolean;
+    backgroundShadowFree: boolean;
   };
 }
 
 export default function VisaPhotoStep({
   onComplete,
+  requiredBackground = "white",
 }: {
   onComplete: (file: File) => void;
+  requiredBackground?: "white" | "blue" | "any";
 }) {
   const [mode, setMode] = useState<"options" | "camera" | "preview">("options");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const [validationResult, setValidationResult] =
     useState<ValidationResult | null>(null);
-  const [countryBg, setCountryBg] = useState<string>("#FFFFFF");
-
+  const countryBg = requiredBackground === "blue" ? "#DBEAFE" : "#FFFFFF";
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -168,6 +171,10 @@ export default function VisaPhotoStep({
       eyesOpen: false,
       neutralExpression: false,
       notBlurry: false,
+      brightnessGood: false,
+      backgroundUniform: false,
+      backgroundClean: false,
+      backgroundShadowFree: false,
     };
 
     try {
@@ -201,6 +208,20 @@ export default function VisaPhotoStep({
         } else {
           checks.singleFace = true;
           const landmarks = results.faceLandmarks[0];
+          const leftEye = landmarks[33];
+          const rightEye = landmarks[263];
+          const nose = landmarks[1];
+
+          const eyeCenterX = (leftEye.x + rightEye.x) / 2;
+          const noseOffset = Math.abs(nose.x - eyeCenterX);
+
+          const lookingStraight = noseOffset < 0.04;
+
+          if (!lookingStraight) {
+            errors.push(
+              "Please look directly at the camera. Side-facing photos are not allowed.",
+            );
+          }
 
           let minX = Infinity,
             minY = Infinity,
@@ -219,31 +240,6 @@ export default function VisaPhotoStep({
             height: (maxY - minY) * height,
           };
 
-          //check for glasses
-          const eyeBox = {
-            x: bbox.originX,
-            y: bbox.originY + bbox.height * 0.25,
-            w: bbox.width,
-            h: bbox.height * 0.25,
-          };
-          const glassesDetected = await detectGlassesSafe(canvas, eyeBox);
-          if (glassesDetected === true) {
-            warnings.push(
-              "Glasses detected — please remove glasses for your visa photo.",
-            );
-          }
-          const hatSuspected = detectPossibleHat(
-            canvas,
-            bbox.originY,
-            bbox.originX,
-            bbox.width,
-          );
-          if (hatSuspected === true) {
-            warnings.push(
-              "Possible hat or head covering detected — please remove if worn (religious headwear is usually allowed).",
-            );
-          }
-
           const driftX =
             Math.abs(bbox.originX + bbox.width / 2 - width / 2) / width;
           const driftY =
@@ -256,10 +252,10 @@ export default function VisaPhotoStep({
             );
 
           const faceHeightRatio = bbox.height / height;
-          checks.faceSize = faceHeightRatio >= 0.25 && faceHeightRatio <= 0.9;
+          checks.faceSize = faceHeightRatio >= 0.45 && faceHeightRatio <= 0.75;
           if (!checks.faceSize)
             errors.push(
-              faceHeightRatio < 0.25
+              faceHeightRatio < 0.5
                 ? "Face is too small. Move closer."
                 : "Face is too large. Move further away.",
             );
@@ -277,12 +273,21 @@ export default function VisaPhotoStep({
             warnings.push(
               "Please maintain a neutral expression with a closed mouth.",
             );
-
           if (ctx) {
             const imageData = ctx.getImageData(0, 0, width, height);
+
             checks.notBlurry = detectBlur(imageData);
-            if (!checks.notBlurry)
+
+            if (!checks.notBlurry) {
               warnings.push("Image appears slightly soft, but is acceptable.");
+            }
+
+            const brightnessGood = detectBrightness(imageData);
+            checks.brightnessGood = brightnessGood;
+
+            if (!brightnessGood) {
+              errors.push("Photo is too dark. Please use better lighting.");
+            }
           }
         }
       }
@@ -317,6 +322,9 @@ export default function VisaPhotoStep({
           bgCtx.fillStyle = countryBg;
           bgCtx.fillRect(0, 0, width, height);
           bgCtx.drawImage(fgImg, 0, 0, width, height);
+          checks.backgroundUniform = true;
+          checks.backgroundClean = true;
+          checks.backgroundShadowFree = true;
           setPhotoUrl(bgRemovedCanvas.toDataURL("image/jpeg", 0.95));
         }
       } catch (segErr: any) {
@@ -357,7 +365,20 @@ export default function VisaPhotoStep({
         sum += laplacian * laplacian;
       }
     }
-    return sum / ((width - 2) * (height - 2)) > 15;
+    return sum / ((width - 2) * (height - 2)) > 40;
+  };
+  const detectBrightness = (imageData: ImageData): boolean => {
+    const data = imageData.data;
+
+    let total = 0;
+
+    for (let i = 0; i < data.length; i += 4) {
+      total += data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+    }
+
+    const avg = total / (data.length / 4);
+
+    return avg > 70;
   };
 
   const handleConfirm = async () => {
@@ -396,45 +417,25 @@ export default function VisaPhotoStep({
                   requirements.
                 </p>
               </div>
-
-              <div className="space-y-3 p-5 bg-[#f5f0e8]/50 rounded-xl border border-[#c9a84c]/10">
-                <label className="text-[11px] font-medium uppercase tracking-[1.2px] text-[#c9a84c] block mb-2">
-                  Auto-Background Color
-                </label>
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setCountryBg("#FFFFFF")}
-                    className={cn(
-                      "w-10 h-10 rounded-full border shadow-sm transition-all duration-300",
-                      countryBg === "#FFFFFF"
-                        ? "border-[#c9a84c] scale-110 shadow-md"
-                        : "border-[#c9a84c]/20 hover:border-[#c9a84c]/50",
-                    )}
-                    style={{ backgroundColor: "#FFFFFF" }}
-                    title="White (Default)"
-                  ></button>
-                  <button
-                    onClick={() => setCountryBg("#DBEAFE")}
-                    className={cn(
-                      "w-10 h-10 rounded-full border shadow-sm transition-all duration-300",
-                      countryBg === "#DBEAFE"
-                        ? "border-[#c9a84c] scale-110 shadow-md"
-                        : "border-[#c9a84c]/20 hover:border-[#c9a84c]/50",
-                    )}
-                    style={{ backgroundColor: "#DBEAFE" }}
-                    title="Light Blue"
-                  ></button>
-                  <button
-                    onClick={() => setCountryBg("#F1F5F9")}
-                    className={cn(
-                      "w-10 h-10 rounded-full border shadow-sm transition-all duration-300",
-                      countryBg === "#F1F5F9"
-                        ? "border-[#c9a84c] scale-110 shadow-md"
-                        : "border-[#c9a84c]/20 hover:border-[#c9a84c]/50",
-                    )}
-                    style={{ backgroundColor: "#F1F5F9" }}
-                    title="Light Gray"
-                  ></button>
+              <div className="space-y-3 p-5 bg-[#f5f0e8]/50 rounded-xl border border-[#c9a84c]/10 flex items-center justify-between">
+                <div>
+                  <label className="text-[11px] font-medium uppercase tracking-[1.2px] text-[#c9a84c] block mb-1">
+                    Auto-Background Color
+                  </label>
+                  <p className="text-[13px] text-[#1f2937]/70">
+                    Strictly locked to visa requirements
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-white border border-[#c9a84c]/30 rounded-lg shadow-sm">
+                  <div
+                    className="w-4 h-4 rounded-full border border-gray-200"
+                    style={{ backgroundColor: countryBg }}
+                  />
+                  <span className="text-[13px] font-semibold text-[#1f2937] capitalize">
+                    {requiredBackground === "any"
+                      ? "White (Default)"
+                      : requiredBackground}
+                  </span>
                 </div>
               </div>
 
@@ -718,6 +719,24 @@ export default function VisaPhotoStep({
                         <CheckItem
                           label="Not Blurry"
                           pass={validationResult.checks.notBlurry}
+                        />
+                        <CheckItem
+                          label="Good Lighting"
+                          pass={validationResult.checks.brightnessGood}
+                        />
+                        <CheckItem
+                          label="Uniform Background"
+                          pass={validationResult.checks.backgroundUniform}
+                        />
+
+                        <CheckItem
+                          label="Clean Background"
+                          pass={validationResult.checks.backgroundClean}
+                        />
+
+                        <CheckItem
+                          label="No Background Shadows"
+                          pass={validationResult.checks.backgroundShadowFree}
                         />
                       </div>
                     </div>

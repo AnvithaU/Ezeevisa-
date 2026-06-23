@@ -61,6 +61,34 @@ const STEPS = [
   { id: 6, label: "Review" },
 ];
 
+const GoldCheckbox = ({ label, checked, onChange, loading }: any) => (
+  <label className="flex w-fit items-center gap-3 px-4 py-2 bg-gradient-to-r from-[#c9a84c]/10 to-[#8b6914]/5 border border-[#c9a84c]/30 rounded-xl cursor-pointer hover:border-[#c9a84c]/60 transition-all shadow-[0_0_15px_rgba(201,168,76,0.1)] group mb-4">
+    <div
+      className={cn(
+        "w-5 h-5 rounded-md border flex items-center justify-center transition-all",
+        checked
+          ? "bg-[#c9a84c] border-[#c9a84c]"
+          : "bg-white border-[#c9a84c]/50 group-hover:border-[#c9a84c]",
+      )}
+    >
+      {loading ? (
+        <Loader2 className="w-3.5 h-3.5 text-white animate-spin" />
+      ) : (
+        checked && <Check className="w-3.5 h-3.5 text-white" />
+      )}
+    </div>
+    <span className="text-[13px] font-bold bg-gradient-to-r from-[#c9a84c] to-[#8b6914] bg-clip-text text-transparent uppercase tracking-wider">
+      {label}
+    </span>
+    <input
+      type="checkbox"
+      className="hidden"
+      checked={checked}
+      onChange={(e) => onChange(e.target.checked)}
+    />
+  </label>
+);
+
 export default function ApplicationForm() {
   const { id } = useParams<{ id: string }>();
   const appId = Number(id);
@@ -734,6 +762,9 @@ export default function ApplicationForm() {
   const countryConfig = app?.countryCode
     ? VISA_REQUIREMENTS[app.countryCode]
     : null;
+  console.log("Country Code:", app?.countryCode);
+  console.log("Country Config:", countryConfig);
+  console.log("Photo Background:", countryConfig?.photoBackground);
 
   // If we don't have a specific config for this country yet, fallback to a default set
   const fallbackDocs = [
@@ -944,9 +975,30 @@ export default function ApplicationForm() {
         >
           {step === 1 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-foreground text-lg">
-                Travel Details
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-foreground text-lg">
+                  Travel Details
+                </h2>
+
+                {travelerIndex > 1 && (
+                  <GoldCheckbox
+                    label="Travel dates same as primary applicant"
+                    checked={false} // We don't need to keep it checked, it's just a trigger button
+                    onChange={async (checked: boolean) => {
+                      if (checked && groupData?.applications?.[0]) {
+                        const primaryApp = groupData.applications[0];
+                        setFormData((prev) => ({
+                          ...prev,
+                          travelDate: primaryApp.travelDate || "",
+                          returnDate: primaryApp.returnDate || "",
+                          purpose: primaryApp.purpose || "",
+                          purposeOther: primaryApp.purposeOther || "",
+                        }));
+                      }
+                    }}
+                  />
+                )}
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
@@ -1411,12 +1463,18 @@ export default function ApplicationForm() {
                     </p>
                   )}
                 </div>
+
                 <div>
                   <label className="block text-sm font-medium text-foreground mb-1.5">
                     Occupation
                   </label>
                   <select
-                    className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-sm"
+                    className={cn(
+                      "w-full px-3.5 py-2.5 bg-background border rounded-lg text-sm transition-all",
+                      fieldErrors.occupation
+                        ? "border-red-500"
+                        : "border-input",
+                    )}
                     value={formData.occupation}
                     onChange={(e) => handleUpdate("occupation", e.target.value)}
                   >
@@ -1452,7 +1510,9 @@ export default function ApplicationForm() {
                   setVisaPhotoFile(file);
                   handleFileUpload("photo", file);
                 }}
+                requiredBackground={countryConfig?.photoBackground ?? "white"}
               />
+
               {visaPhotoFile && (
                 <div className="p-4 bg-emerald-500/10 text-emerald-600 rounded-xl flex items-center justify-center gap-2 font-bold mt-4 border border-emerald-500/20">
                   <Check className="w-5 h-5" />
@@ -1465,9 +1525,33 @@ export default function ApplicationForm() {
           {/* ----- NEW STEP 4: ACCOMMODATION ----- */}
           {step === 4 && (
             <div className="space-y-5">
-              <h2 className="font-semibold text-foreground text-lg">
-                Accommodation Details
-              </h2>
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold text-foreground text-lg">
+                  Accommodation Details
+                </h2>
+                {travelerIndex > 1 && (
+                  <GoldCheckbox
+                    label="Staying at same hotel as primary applicant"
+                    checked={false}
+                    onChange={async (checked: boolean) => {
+                      if (checked && groupData?.applications?.[0]) {
+                        const primaryApp = groupData.applications[0];
+                        setFormData((prev) => ({
+                          ...prev,
+                          hotelName: primaryApp.hotelName || "",
+                          hotelAddress: primaryApp.hotelAddress || "",
+                        }));
+                        // Clear errors if they auto-fill correctly
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          hotelName: "",
+                          hotelAddress: "",
+                        }));
+                      }
+                    }}
+                  />
+                )}
+              </div>
 
               {/* 🌟 FAMILY INHERITANCE: AUTOFILL BUTTON 🌟 */}
               {travelerIndex > 1 && groupData?.applications?.[0] && (
@@ -1585,32 +1669,30 @@ export default function ApplicationForm() {
                         {travelerIndex > 1 &&
                           docType.type !== "photo" &&
                           !uploaded && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleLinkPrimaryDocument(docType.type)
-                              }
-                              className={cn(
-                                "mt-2 text-[11px] font-semibold flex items-center gap-1.5 transition-colors p-1.5 rounded-md border inline-flex",
-                                linkedDocs.includes(docType.type)
-                                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600"
-                                  : "bg-background border-border text-primary hover:bg-muted",
-                              )}
-                            >
-                              {linkedDocs.includes(docType.type) ? (
-                                <>
-                                  <Check className="w-3 h-3" /> Linked to
-                                  Primary
-                                </>
-                              ) : (
-                                <>
-                                  <Sparkles className="w-3 h-3" /> Use Primary
-                                  Applicant's File
-                                </>
-                              )}
-                            </button>
+                            <div className="mt-3">
+                              <GoldCheckbox
+                                label="Copy from Primary Applicant"
+                                checked={linkedDocs.includes(docType.type)}
+                                loading={uploadingType === docType.type}
+                                onChange={async (checked: boolean) => {
+                                  if (
+                                    checked &&
+                                    !linkedDocs.includes(docType.type)
+                                  ) {
+                                    await handleLinkPrimaryDocument(
+                                      docType.type,
+                                    );
+                                    setLinkedDocs((prev) => [
+                                      ...prev,
+                                      docType.type,
+                                    ]);
+                                  }
+                                }}
+                              />
+                            </div>
                           )}
                       </div>
+
                       {/* UPLOAD / REMOVE BUTTONS */}
                       <div className="flex-shrink-0 ml-auto">
                         {uploaded ? (
